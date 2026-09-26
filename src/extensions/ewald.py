@@ -333,3 +333,52 @@ class Ewald(Potential):
         e_self = self._energy_self(q)
 
         return e_real + e_recip + e_surf + e_self, f_real + f_recip + f_surf
+
+    # ──────────────────────────────────────────────
+    # Analytic virial
+    # ──────────────────────────────────────────────
+
+    def stress(self, lattice, species, positions, eps: float = 1e-4) -> np.ndarray:
+        """
+        σ = (1/V) ∂E/∂ε under homogeneous strain (r → (I+ε)r, k → (I−εᵀ)k,
+        V → V(1+tr ε); k·r and hence S(k) are invariant):
+
+          real:    σ = (1/2V) Σ_m φ′(r)/r · r⊗r,  φ = k_e q_i q_j erfc(αr)/r
+          recip:   σ = (1/V) Σ_k E_k [ −δ + 2(1/k² + 1/4α²) k⊗k ],
+                   E_k = (2π k_e / V) e^{−k²/4α²}/k² |S(k)|²
+          self:    0 (strain independent)
+          surface: σ = (2π k_e / ((2ε+1) V²)) (2 M⊗M − M² δ),  M = Σ q r   (finite ε only)
+
+        The k-set is held fixed (|k| ≤ k_c); vectors crossing the sphere under
+        strain contribute O(δ).
+        """
+        from scipy.special import erfc
+        lattice = np.asarray(lattice, dtype=float)
+        volume  = abs(np.linalg.det(lattice))
+        q       = self._get_charges(species)
+        cart    = self._frac_to_cart(lattice, positions)
+        sigma   = np.zeros((3, 3))
+
+        i_idx, j_idx, r_vecs = self._neighbors(lattice, positions, self.cutoff)
+        if len(i_idx) > 0:
+            r   = np.linalg.norm(r_vecs, axis=1)
+            ar  = self.alpha * r
+            fac = q[i_idx] * q[j_idx] * (
+                erfc(ar) / r**3 + 2 * self.alpha / np.sqrt(np.pi) * np.exp(-ar * ar) / r**2
+            )                                               # = −φ′(r)/(k_e r)
+            sigma -= 0.5 * self.KE * np.einsum("m,ma,mb->ab", fac, r_vecs, r_vecs) / volume
+
+        k_vecs, k2 = self._k_vectors(lattice)
+        if len(k2) > 0:
+            phase = cart @ k_vecs.T
+            S2    = (q @ np.cos(phase)) ** 2 + (q @ np.sin(phase)) ** 2
+            Ek    = self.KE * (2 * np.pi / volume) * np.exp(-k2 / (4 * self.alpha**2)) / k2 * S2
+            w     = 2.0 * (1.0 / k2 + 1.0 / (4 * self.alpha**2))
+            sigma += (np.einsum("k,k,ka,kb->ab", Ek, w, k_vecs, k_vecs)
+                      - np.sum(Ek) * np.eye(3)) / volume
+
+        if not np.isinf(self.epsilon):
+            M = q @ cart
+            A = self.KE * 2 * np.pi / (2 * self.epsilon + 1)
+            sigma += A * (2 * np.outer(M, M) - (M @ M) * np.eye(3)) / volume**2
+        return sigma

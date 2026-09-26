@@ -685,6 +685,33 @@ class BV(Potential):
         np.add.at(f, i_idx, df)
         return e, f
 
+    def stress(self, lattice, species, positions, eps: float = 1e-4) -> np.ndarray:
+        """
+        Analytic virial. Under homogeneous strain every bond vector r_m
+        (full ordered list, each appearance independent) maps to (I+ε) r_m, so
+        σ = (1/V) Σ_m g_m ⊗ r_m with g_m = ∂E/∂r_m. Entry m = (i, j, n) enters
+        only V_i, hence
+            g_m = 2 S_i (V_i − V0_i) v′(r_m) r̂_m,
+            σ_BV = (1/V) Σ_m 2 S_i (V_i − V0_i) v′(r_m)/r_m · r_m ⊗ r_m
+        (v = switched bond valence). Each term is symmetric.
+        """
+        lattice = np.asarray(lattice, dtype=float)
+        volume  = abs(np.linalg.det(lattice))
+        n = len(species)
+        i_idx, j_idx, r_vecs = self._neighbors(lattice, positions, self.cutoff)
+        if len(i_idx) == 0:
+            return np.zeros((3, 3))
+        codes, r0_tbl, C_tbl, b_tbl = self._pair_tables(species)
+        V0_per, S_per = self._species_tables(species)
+        r  = np.linalg.norm(r_vecs, axis=1)
+        bv, dVdr = self._valence_and_deriv(
+            r, r0_tbl[codes[i_idx], codes[j_idx]], C_tbl[codes[i_idx], codes[j_idx]],
+            b_tbl[codes[i_idx], codes[j_idx]])
+        V = np.zeros(n)
+        np.add.at(V, i_idx, bv)
+        coef = 2.0 * S_per[i_idx] * (V[i_idx] - V0_per[i_idx]) * dVdr / r
+        return np.einsum("m,ma,mb->ab", coef, r_vecs, r_vecs) / volume
+
 
 # ──────────────────────────────────────────────
 # E_BVV : Bond Valence Vector
@@ -880,6 +907,36 @@ class BVV(Potential):
         np.add.at(f, i_idx, df)
         return e, f
 
+    def stress(self, lattice, species, positions, eps: float = 1e-4) -> np.ndarray:
+        """
+        Analytic virial, σ = (1/V) Σ_m g_m ⊗ r_m with (entry m = (i, j, n) enters W_i)
+            g_m = 4 c_i [ (v′ − v/r)(r̂_m·W_i) r̂_m + (v/r) W_i ],  c_i = D_i(|W_i|² − W0_i²),
+        using ∂(v r̂)/∂r = (v′ − v/r) r̂r̂ᵀ + (v/r) I. Summing the second term over
+        the entries of atom a gives W_a ⊗ Σ_m v r̂_m = W_a ⊗ W_a, so
+            σ_BVV = (4/V) [ Σ_m c_i (v′ − v/r)(r̂_m·W_i) r̂_m ⊗ r_m + Σ_a c_a W_a ⊗ W_a ],
+        which is manifestly symmetric.
+        """
+        lattice = np.asarray(lattice, dtype=float)
+        volume  = abs(np.linalg.det(lattice))
+        n = len(species)
+        i_idx, j_idx, r_vecs = self._neighbors(lattice, positions, self.cutoff)
+        if len(i_idx) == 0:
+            return np.zeros((3, 3))
+        codes, r0_tbl, C_tbl, b_tbl = self._pair_tables(species)
+        W0_per, D_per = self._species_tables(species)
+        r     = np.linalg.norm(r_vecs, axis=1)
+        r_hat = r_vecs / r[:, None]
+        Vij, dVdr = self._valence_and_deriv(
+            r, r0_tbl[codes[i_idx], codes[j_idx]], C_tbl[codes[i_idx], codes[j_idx]],
+            b_tbl[codes[i_idx], codes[j_idx]])
+        W = np.zeros((n, 3))
+        np.add.at(W, i_idx, (Vij / r)[:, None] * r_vecs)
+        c    = D_per * (np.einsum("ij,ij->i", W, W) - W0_per**2)
+        proj = np.einsum("mi,mi->m", r_hat, W[i_idx])
+        coef = c[i_idx] * (dVdr - Vij / r) * proj
+        sigma = np.einsum("m,ma,mb->ab", coef, r_hat, r_vecs) + np.einsum("a,ai,aj->ij", c, W, W)
+        return 4.0 * sigma / volume
+
 
 # ──────────────────────────────────────────────
 # E_a : Angle (O-O-O harmonic)
@@ -1047,8 +1104,8 @@ class BVFF:
 
     def stress(self, lattice, species, positions) -> np.ndarray:
         """Total virial stress (3, 3) in eV/Å³, summed over active terms.
-        Cheap terms (Coulomb, Repulsive) use their analytic virial; the rest
-        fall back to the finite-difference strain derivative."""
+        Coulomb, Repulsive, Buckingham, BV, BVV and Ewald use analytic virials;
+        Angle falls back to the finite-difference strain derivative."""
         sigma = np.zeros((3, 3))
         for t in self.terms:
             sigma += t.stress(lattice, species, positions)
