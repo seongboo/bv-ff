@@ -228,6 +228,7 @@ def main():
         maxiter             = controls.fitting.maxiter,
         target_loss         = controls.fitting.target_loss,
         patience            = controls.fitting.patience,
+        fixed               = controls.fitting.fixed,
     )
     logger.info(f"Best loss: {best_loss:.6f} | fitting took {time.time() - t0:.1f}s")
 

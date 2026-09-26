@@ -34,6 +34,7 @@ class FittingControls:
     target_loss: float = 0.0   # stop when best loss < target_loss (0 disables)
     patience:    int   = 0     # stop after N evaluations w/o improvement (0 disables)
     maxiter:     int   = 1000  # hard cap on dual_annealing outer iterations
+    fixed:       list[str] = field(default_factory=lambda: ["BV.species.*.V0"])  # glob patterns of held parameters
 
 
 @dataclass
@@ -140,6 +141,7 @@ def _parse_fitting(data: dict) -> FittingControls:
         use_stress  = bool (f.get("use_stress",  d["use_stress"])),
         polish      = bool (f.get("polish",      d["polish"])),
         target_loss = float(f.get("target_loss", d["target_loss"])),
+        fixed       = [str(p) for p in f.get("fixed", d["fixed"])],
         patience    = int  (f.get("patience",    d["patience"])),
         maxiter     = int  (f.get("maxiter",     d["maxiter"])),
     )

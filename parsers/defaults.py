@@ -58,6 +58,13 @@ DEFAULT_CONTROLS = {
         "target_loss": 0.0,
         "patience":    0,
         "maxiter":     1000,
+        # Parameters held at their parameters.toml values (glob patterns on
+        # fit keys, e.g. "BV.species.*.V0", "BVV.O.W0"). V0 is fixed by
+        # default: with free V0 the BV/BVV energy has two exact gauge
+        # symmetries (valence rescaling V→κV and the bond-valence sum-rule
+        # shift of V0), so the parameters are not identifiable. V0 = formal
+        # oxidation state, as in the BVMD literature.
+        "fixed":       ["BV.species.*.V0"],
     },
 }
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import fnmatch
 import logging
 import time
 from typing import Callable
@@ -80,6 +81,16 @@ def neutralize_charges(charges: dict[str, float], composition: dict[str, int]) -
     rest = sum(n * out.get(s, 0.0) for s, n in composition.items() if s != d)
     out[d] = -rest / composition[d]
     return out
+
+
+# ──────────────────────────────────────────────
+# Fixed (held) parameters
+# ──────────────────────────────────────────────
+
+def free_mask(keys: list[str], fixed: list[str] | tuple[str, ...]) -> np.ndarray:
+    """Boolean mask over ``keys``: True = fitted, False = matches any glob in
+    ``fixed`` (held at its input value)."""
+    return np.array([not any(fnmatch.fnmatchcase(k, p) for p in fixed) for k in keys], dtype=bool)
 
 
 # ──────────────────────────────────────────────
@@ -439,6 +450,7 @@ def fit(
     target_loss:       float = 0.0,
     patience:          int   = 0,
     seed:              int   = 42,
+    fixed:             list[str] | tuple[str, ...] = ("BV.species.*.V0",),
 ) -> tuple[Parameters, float]:
     """
     Fit BVFF parameters with Simulated Annealing (scipy ``dual_annealing``),
@@ -462,6 +474,8 @@ def fit(
         target_loss:        stop once best loss < target_loss (0 disables)
         patience:           stop after this many evaluations w/o improvement (0 disables)
         seed:               random seed for reproducibility
+        fixed:              glob patterns of parameter keys held at their input
+                            values (default: BV V0 — see controls.toml)
 
     Returns:
         fitted_params: optimized Parameters dataclass
@@ -484,7 +498,15 @@ def fit(
         params.coulomb.charges = neutral
         logger.info(f"Charge neutrality: q_{d} is dependent (not fitted).")
 
-    x0, keys = params_to_vector(params, controls_potentials, composition)
+    x_all, keys_all = params_to_vector(params, controls_potentials, composition)
+    mask = free_mask(keys_all, fixed)
+    for pat in fixed:
+        if not any(fnmatch.fnmatchcase(k, pat) for k in keys_all):
+            logger.warning(f"fixed pattern '{pat}' matches no fit parameter")
+    held = [k for k, m in zip(keys_all, mask) if not m]
+    if held:
+        logger.info(f"Held fixed ({len(held)}): " + ", ".join(held))
+    x0, keys = x_all[mask], [k for k, m in zip(keys_all, mask) if m]
     bounds   = build_bounds(keys)
 
     logger.info(f"Fitting {len(keys)} parameters with Simulated Annealing ...")

@@ -86,3 +86,9 @@ polish      = 1
 target_loss = 0.0
 patience    = 50
 maxiter     = 1000
+# Parameters held at their parameters.toml values (glob patterns on fit keys).
+#   BV.species.*.V0 : formal valences. With V0 free the BV/BVV energy has two
+#                     exact gauge symmetries (V→κV rescaling, and the sum-rule
+#                     shift S_O δV0_O = -S_c δV0_c), so the fit is not identifiable.
+#   BVV.O.W0        : irrelevant while BVV.O.D = 0 (drop it if D_O is nonzero).
+fixed = ["BV.species.*.V0", "BVV.O.W0"]
