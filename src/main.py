@@ -106,7 +106,7 @@ def build_bvff(controls: Controls, params: Parameters, logger: logging.Logger = 
     if not terms:
         raise ValueError("No potential terms enabled in controls.toml.")
 
-    return BVFF(terms=terms)
+    return BVFF(terms=terms, energy_ref=params.energy_ref)
 
 
 # ──────────────────────────────────────────────

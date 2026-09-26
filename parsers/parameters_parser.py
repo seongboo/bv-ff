@@ -79,6 +79,10 @@ class Parameters:
     BV:         BVParams         = field(default_factory=BVParams)
     BVV:        BVVParams        = field(default_factory=BVVParams)
     angle:      AngleParams      = field(default_factory=AngleParams)
+    # Per-species reference energy μ_s (eV/atom), E_ref = Σ n_s μ_s. Written
+    # by the fit (least-squares, see fitting.fit_energy_reference); optional
+    # on input. Not a fitted SA parameter.
+    energy_ref: dict[str, float] = field(default_factory=dict)
 
 
 # ──────────────────────────────────────────────
@@ -221,6 +225,9 @@ def save_parameters(params: Parameters, filepath: str) -> None:
 
     if params.angle.k != 0.0:
         data["angle"] = {"k": params.angle.k}
+
+    if params.energy_ref:
+        data["energy_ref"] = {s: float(mu) for s, mu in params.energy_ref.items()}
 
     Path(filepath).parent.mkdir(parents=True, exist_ok=True)
     with open(filepath, "wb") as f:
@@ -373,6 +380,7 @@ def parse_parameters(
         BV         = _parse_BV(data),
         BVV        = _parse_BVV(data),
         angle      = _parse_angle(data),
+        energy_ref = {str(k): float(v) for k, v in data.get("energy_ref", {}).items()},
     )
 
     if validate:

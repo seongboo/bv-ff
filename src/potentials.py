@@ -957,19 +957,35 @@ class Angle(Potential):
 
 class BVFF:
     """
-    Total BVFF potential: E_tot = E_c + E_r + E_BV + E_BVV + E_a
+    Total BVFF potential: E_tot = E_c + E_r + E_BV + E_BVV + E_a + E_ref
     Each term can be toggled on/off via the terms list.
+
+    E_ref = Σ_s n_s μ_s is a per-species constant reference energy that
+    aligns BVFF energies with the (arbitrary) zero of the DFT total energy.
+    It is fitted by linear least squares (see fitting.fit_energy_reference),
+    has no effect on forces or stress, and is irrelevant for MD dynamics.
     """
 
-    def __init__(self, terms: list[Potential]):
+    def __init__(self, terms: list[Potential], energy_ref: dict[str, float] | None = None):
         """
         Args:
-            terms: list of active Potential instances
+            terms:      list of active Potential instances
+            energy_ref: {species: μ_s} in eV/atom (default: none → E_ref = 0)
         """
-        self.terms = terms
+        self.terms      = terms
+        self.energy_ref = dict(energy_ref or {})
+
+    def reference_energy(self, species: list[str]) -> float:
+        """E_ref = Σ_i μ_{species_i} (eV)."""
+        if not self.energy_ref:
+            return 0.0
+        return float(sum(self.energy_ref.get(s, 0.0) for s in species))
 
     def energy(self, lattice, species, positions) -> float:
-        return sum(t.energy(lattice, species, positions) for t in self.terms)
+        return (
+            sum(t.energy(lattice, species, positions) for t in self.terms)
+            + self.reference_energy(species)
+        )
 
     def forces(self, lattice, species, positions) -> np.ndarray:
         n = len(species)
@@ -1000,7 +1016,7 @@ class BVFF:
         called once instead of twice).
         """
         n  = len(species)
-        e  = 0.0
+        e  = self.reference_energy(species)
         f  = np.zeros((n, 3))
         for t in self.terms:
             te, tf = t.energy_and_forces(lattice, species, positions)

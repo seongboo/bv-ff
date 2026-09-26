@@ -233,6 +233,62 @@ def vector_to_params(
 
 
 # ──────────────────────────────────────────────
+# Energy reference (profiled out of the loss)
+# ──────────────────────────────────────────────
+#
+# DFT total energies have an arbitrary zero; the model must reproduce energy
+# *differences*. With a per-species reference E_ref,f = Σ_s n_{f,s} μ_s the
+# per-atom energy residual of frame f is
+#
+#     e_f(μ) = (ΔE_f − N_f·μ) / n_f,     ΔE_f = E_DFT,f − E_BVFF,f
+#
+# For fixed potential parameters this is linear in μ, so the μ minimising
+# Σ_f e_f² is a weighted linear least-squares problem, solved exactly at every
+# loss evaluation (variable projection). Rows are scaled by 1/n_f to match the
+# per-atom loss. With a single composition N has rank 1: only Σ_s n_s μ_s is
+# determined and lstsq returns the minimum-norm μ; E_ref itself is unique.
+#
+# The profiled residual is invariant to any reference already contained in
+# E_BVFF (it lies in the column space of N), so the loss does not depend on
+# params.energy_ref.
+
+def _composition_matrix(frames: list[Frame], species: list[str]) -> np.ndarray:
+    """(F, K) matrix of atom counts n_{f,s}."""
+    col = {s: k for k, s in enumerate(species)}
+    N = np.zeros((len(frames), len(species)))
+    for r, fr in enumerate(frames):
+        for s in fr.species:
+            N[r, col[s]] += 1.0
+    return N
+
+
+def _solve_energy_reference(
+    delta_e: np.ndarray, N: np.ndarray, n_atoms: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Return (μ, per-atom residuals) for min_μ Σ_f ((ΔE_f − N_f·μ)/n_f)²."""
+    A = N / n_atoms[:, None]
+    b = delta_e / n_atoms
+    mu, *_ = np.linalg.lstsq(A, b, rcond=None)
+    return mu, b - A @ mu
+
+
+def fit_energy_reference(bvff: BVFF, frames: list[Frame]) -> dict[str, float]:
+    """Least-squares μ_s for a BVFF *without* reference (its own energy_ref is
+    ignored), such that E_DFT ≈ E_BVFF + Σ n_s μ_s."""
+    species = sorted({s for fr in frames for s in fr.species})
+    N       = _composition_matrix(frames, species)
+    n_atoms = N.sum(axis=1)
+    delta_e = np.array([
+        fr.energy
+        - bvff.energy(fr.lattice, fr.species, fr.positions)
+        + bvff.reference_energy(fr.species)
+        for fr in frames
+    ])
+    mu, _ = _solve_energy_reference(delta_e, N, n_atoms)
+    return {s: float(m) for s, m in zip(species, mu)}
+
+
+# ──────────────────────────────────────────────
 # Loss function
 # ──────────────────────────────────────────────
 
@@ -251,7 +307,9 @@ def compute_loss(
     Compute weighted RMSE loss:
         Loss = w_E * RMSE_E + w_F * RMSE_F (+ w_S * RMSE_S if stress enabled)
 
-    Energies and forces are normalized by number of atoms.
+    RMSE_E is per atom, after removing the least-squares per-species
+    reference energy (see ``_solve_energy_reference``): only energy
+    differences between frames are fitted, never the arbitrary DFT zero.
 
     Stress is included only when ``use_stress`` and ``has_stress`` are both
     set: the BVFF virial stress (eV/Å³) is compared against the reference,
@@ -265,7 +323,8 @@ def compute_loss(
     loop using ``progress_label``. Each loss evaluation gets its own bar that
     fills 0→100%; on a TTY the bar overwrites itself in place.
     """
-    e_errors, f_errors, s_errors = [], [], []
+    f_errors, s_errors = [], []
+    e_model, e_ref = [], []
     include_stress = use_stress and has_stress
 
     frame_iter = progress_iter(frames, label=progress_label) if progress else frames
@@ -279,7 +338,8 @@ def compute_loss(
         e_bvff, f_bvff = bvff.energy_and_forces(
             frame.lattice, frame.species, frame.positions,
         )
-        e_errors.append((e_bvff / n - frame.energy / n) ** 2)
+        e_model.append(e_bvff)
+        e_ref.append(frame.energy)
         f_errors.append(np.mean((f_bvff - frame.forces) ** 2))
 
         # Stress RMSE (eV/Å³). Reference VASP stress (kBar) → eV/Å³ via the
@@ -289,7 +349,12 @@ def compute_loss(
             s_ref  = -np.asarray(frame.stress) / EV_PER_ANG3_TO_KBAR
             s_errors.append(np.mean((s_bvff - s_ref) ** 2))
 
-    rmse_E = np.sqrt(np.mean(e_errors))
+    species = sorted({s for fr in frames for s in fr.species})
+    N       = _composition_matrix(frames, species)
+    _, e_res = _solve_energy_reference(
+        np.asarray(e_ref) - np.asarray(e_model), N, N.sum(axis=1),
+    )
+    rmse_E = np.sqrt(np.mean(e_res ** 2))
     rmse_F = np.sqrt(np.mean(f_errors))
 
     loss = w_E * rmse_E + w_F * rmse_F
@@ -551,6 +616,13 @@ def fit(
             )
 
     fitted_params = vector_to_params(best_x, keys, params, composition)
+
+    # Reference energy for the fitted model (constant; no effect on forces).
+    fitted_params.energy_ref = fit_energy_reference(bvff_builder(fitted_params), train_frames)
+    logger.info(
+        "Energy reference μ_s (eV/atom): "
+        + ", ".join(f"{s}={m:+.6f}" for s, m in fitted_params.energy_ref.items())
+    )
     logger.info(
         f"Fitting completed in {time.time() - t_fit_start:.1f}s "
         f"| best loss = {best_loss:.6f}"
