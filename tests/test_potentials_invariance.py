@@ -109,7 +109,7 @@ def test_invariance_bvv(frame, delta):
 def test_invariance_ewald(frame, delta):
     ewald = Ewald(
         charges = {"Pb": 1.4, "Ti": 1.0, "O": -0.8},
-        alpha   = 0.3, kmax = 5, cutoff = CUTOFF, epsilon = 1.0,
+        cutoff  = CUTOFF,   # tin-foil, α and k_c from default accuracy
     )
     # Ewald energies are ~hundreds of eV → looser absolute tolerance.
     _check_invariance(ewald, frame, delta, e_atol=1e-6, f_atol=1e-9)

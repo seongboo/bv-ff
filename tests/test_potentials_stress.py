@@ -112,7 +112,7 @@ def test_stress_translation_invariance(frame, delta):
         Repulsive(B={"O-O": 1.83, "O-Pb": 2.17, "O-Ti": 1.28}, cutoff=CUTOFF),
         BV(species_params=_BV_SP, pair_params=_BV_PP, cutoff=CUTOFF),
         BVV(species_params=_BVV_SP, pair_params=_BV_PP, cutoff=CUTOFF),
-        Ewald(charges={"Pb": 1.4, "Ti": 1.0, "O": -0.8}, alpha=0.3, kmax=5, cutoff=CUTOFF),
+        Ewald(charges={"Pb": 1.4, "Ti": 1.0, "O": -0.8}, cutoff=CUTOFF),
     ]
     for pot in terms:
         s0 = pot.stress(frame.lattice, frame.species, frame.positions)

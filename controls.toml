@@ -58,7 +58,12 @@ use_angle      = 0
 bv_form        = "power"
 
 [extensions]
-use_ewald = 1
+use_ewald      = 1
+# Ewald real-space cutoff (Å), independent of the short-range `cutoff` in
+# parameters.toml, and target accuracy δ. Derived: α = √(-ln δ)/r_c,
+# k_c = 2α√(-ln δ). Boundary is tin-foil (no dipole surface term).
+ewald_cutoff   = 8.0
+ewald_accuracy = 1e-6
 
 [fitting]
 w_E         = 1.0

@@ -35,14 +35,17 @@ def build_bvff(controls: Controls, params: Parameters, logger: logging.Logger = 
 
     if pc.use_coulomb:
         if ext.use_ewald:
-            terms.append(Ewald(
-                charges = params.coulomb.charges,
-                alpha   = 0.3,
-                kmax    = 5,
-                cutoff  = cutoff,
-                epsilon = 1.0,
-            ))
-            if logger: logger.info("Potential: Coulomb (Ewald summation)")
+            ew = Ewald(
+                charges  = params.coulomb.charges,
+                cutoff   = ext.ewald_cutoff,
+                accuracy = ext.ewald_accuracy,
+            )
+            terms.append(ew)
+            if logger:
+                logger.info(
+                    f"Potential: Coulomb (Ewald, tin-foil) r_c={ew.cutoff:.2f} Å, "
+                    f"δ={ew.accuracy:.0e} → α={ew.alpha:.4f} Å⁻¹, k_c={ew.kcut:.4f} Å⁻¹"
+                )
         else:
             terms.append(Coulomb(
                 charges = params.coulomb.charges,

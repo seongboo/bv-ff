@@ -70,11 +70,13 @@ def _check_array(arr: np.ndarray, expected_norm, expected_max, expected_sum):
 # ──────────────────────────────────────────────
 
 def test_coulomb(frame):
+    # Values in eV: Coulomb now includes k_e = 14.3996454784 eV·Å (previously
+    # returned e²/Å, i.e. these values / k_e).
     coul = Coulomb(charges={"Pb": 1.4, "Ti": 1.0, "O": -0.8}, cutoff=CUTOFF)
     e = coul.energy(frame.lattice, frame.species, frame.positions)
     f = coul.forces(frame.lattice, frame.species, frame.positions)
-    assert e == pytest.approx(-2.545410147569994e+01, abs=ATOL)
-    _check_array(f, 7.055224680853588e-01, 2.191833234988994e-01, -5.551115123125783e-17)
+    assert e == pytest.approx(-3.665300372212974e+02, abs=ATOL)
+    _check_array(f, 1.015927341747494e+01, 3.156162153161611e+00, -5.551115123125783e-15)
 
 
 # ──────────────────────────────────────────────

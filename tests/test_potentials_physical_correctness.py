@@ -135,8 +135,7 @@ def test_ewald_class_madelung_nacl():
     cl = [[.5, .5, .5], [.5, 0, 0], [0, .5, 0], [0, 0, .5]]
     x  = np.array(na + cl, dtype=float)
     sp = ["Na"] * 4 + ["Cl"] * 4
-    ew = Ewald({"Na": 1.0, "Cl": -1.0}, alpha=1.5, kmax=12,
-               cutoff=2.8, epsilon=np.inf)
+    ew = Ewald({"Na": 1.0, "Cl": -1.0}, cutoff=2.8, accuracy=1e-9)
     e_pair  = ew.energy(L, sp, x) / 4                   # per NaCl formula unit
     madelung = -e_pair * (a / 2) / Ewald.KE
     assert madelung == pytest.approx(1.747565, abs=1e-5)
@@ -190,3 +189,77 @@ def test_wrap_invariance(bvff, frame, name, atom, shift):
     )
     err = np.max(np.abs(f1 - f0))
     assert err < 1e-8, f"{name}: forces changed by up to {err:.2e} eV/Å"
+
+
+# ──────────────────────────────────────────────
+# 4. Ewald: α independence, cell-size consistency, neutrality
+# ──────────────────────────────────────────────
+
+def test_ewald_alpha_independence(frame, params):
+    """For a neutral cell the converged Ewald energy is independent of the
+    splitting α. Vary α with r_c = p/α and k_c = 2αp at fixed δ."""
+    L, sp, x = frame.lattice, frame.species, frame.positions
+    delta = 1e-8
+    p = np.sqrt(-np.log(delta))
+    energies = []
+    for alpha in (0.45, 0.60, 0.75):
+        ew = Ewald(params.coulomb.charges, cutoff=p / alpha, accuracy=delta)
+        assert ew.alpha == pytest.approx(alpha)
+        energies.append(ew.energy(L, sp, x) / len(sp))
+    assert np.ptp(energies) < 1e-6, f"E/atom spread over α: {np.ptp(energies):.2e} eV/atom"
+
+
+def test_ewald_same_accuracy_for_supercell(frame, params):
+    """k_c is a |k| sphere, so the same (r_c, δ) must give the same E/atom for
+    the cell and its 2×2×2 supercell (an index-based kmax would not)."""
+    L, sp, x = frame.lattice, frame.species, frame.positions
+    ew = Ewald(params.coulomb.charges, cutoff=6.0, accuracy=1e-8)
+    L2, sp2, x2 = _supercell(L, sp, x)
+    e1 = ew.energy(L,  sp,  x)  / len(sp)
+    e2 = ew.energy(L2, sp2, x2) / len(sp2)
+    assert e2 == pytest.approx(e1, abs=1e-6)
+
+
+def test_ewald_rejects_non_neutral_cell(frame):
+    ew = Ewald({"Pb": 1.4, "Ti": 1.0, "O": -0.7}, cutoff=6.0)   # net +2.4 e per cell
+    with pytest.raises(ValueError, match="charge-neutral"):
+        ew.energy(frame.lattice, frame.species, frame.positions)
+
+
+def test_ewald_finite_epsilon_warns():
+    with pytest.warns(UserWarning, match="epsilon"):
+        Ewald({"Na": 1.0, "Cl": -1.0}, cutoff=6.0, epsilon=1.0)
+
+
+# ──────────────────────────────────────────────
+# 5. Fitting keeps the charges neutral
+# ──────────────────────────────────────────────
+
+def test_fitting_charge_neutrality(frame, params):
+    from parsers.controls_parser import parse_controls
+    from src.fitting import (
+        params_to_vector, vector_to_params, frames_composition, dependent_species,
+    )
+    pc   = parse_controls(str(_ROOT / "controls.toml")).potentials
+    comp = frames_composition([frame])
+    assert dependent_species(comp) == "O"
+
+    x, keys = params_to_vector(params, pc, comp)
+    assert "coulomb.O" not in keys and "coulomb.Pb" in keys
+
+    rng = np.random.default_rng(1)
+    for _ in range(5):
+        x_trial = x.copy()
+        for k, name in enumerate(keys):
+            if name.startswith("coulomb."):
+                x_trial[k] = rng.uniform(-3, 3)
+        q = vector_to_params(x_trial, keys, params, comp).coulomb.charges
+        assert sum(n * q[s] for s, n in comp.items()) == pytest.approx(0.0, abs=1e-12)
+
+
+def test_frames_composition_rejects_mixed_ratios(frame):
+    from dataclasses import replace
+    from src.fitting import frames_composition
+    other = replace(frame, species=["Pb"] * 8 + ["Ti"] * 8 + ["O"] * 23 + ["Pb"])
+    with pytest.raises(ValueError, match="composition"):
+        frames_composition([frame, other])

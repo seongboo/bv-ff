@@ -1,25 +1,27 @@
 from __future__ import annotations
 
+import warnings
+
 import numpy as np
 
-from ..potentials import Potential
+from ..potentials import Potential, COULOMB_CONSTANT
 
 
 # ──────────────────────────────────────────────
 # k-vector cache
 # ──────────────────────────────────────────────
 #
-# k-vectors and their squared magnitudes depend only on the lattice and
-# kmax, neither of which changes during fitting. Memoize so each frame
-# computes the (2*kmax+1)^3 - 1 vectors exactly once across all SA
-# iterations and across energy/forces calls.
+# k-vectors and their squared magnitudes depend only on the lattice and the
+# reciprocal cutoff k_c, neither of which changes during fitting. Memoize so
+# each frame builds its k-set exactly once across all SA iterations and
+# across energy/forces calls.
 
-# Key is (lattice.tobytes(), kmax) — content-based, so identical lattices
+# Key is (lattice.tobytes(), k_c) — content-based, so identical lattices
 # share a cache entry and freshly-allocated arrays (with reused memory
 # addresses after GC) don't cause stale hits. See potentials._NEIGHBOR_CACHE
 # for the same rationale.
 _KVEC_CACHE: dict[
-    tuple[bytes, int],
+    tuple[bytes, float],
     tuple[np.ndarray, np.ndarray],
 ] = {}
 
@@ -31,43 +33,75 @@ def clear_kvec_cache() -> None:
 
 class Ewald(Potential):
     """
-    Ewald summation for long-range Coulomb interactions.
+    Ewald summation for long-range Coulomb interactions (k_e = COULOMB_CONSTANT).
 
-    E_total = E_real + E_recip + E_surface + E_self
+        E = E_real + E_recip + E_self (+ E_surface for finite epsilon)
 
-    E_real    : short-range part in real space
-    E_recip   : long-range part in reciprocal space
-    E_surface : dipole correction for polar systems (ferroelectrics)
-    E_self    : self-interaction correction
+        E_real  = (k_e/2) Σ'_(i,j,n) q_i q_j erfc(α r)/r
+        E_recip = (2π k_e / V) Σ_{0<|k|<=k_c} exp(-k²/4α²)/k² |S(k)|²,  S(k) = Σ_j q_j e^{ik·r_j}
+        E_self  = -k_e (α/√π) Σ_i q_i²
+
+    Parameters from a target accuracy δ. Truncation errors of both sums are
+    balanced by requiring exp(-α² r_c²) = exp(-k_c²/4α²) = δ, i.e.
+
+        p = √(-ln δ),   α = p / r_c,   k_c = 2 α p.
+
+    The k-sum is cut on |k| <= k_c (a sphere), not on integer indices, so a
+    given (r_c, δ) gives the same accuracy for any cell size or shape
+    (supercells, NPT, mixed datasets). ``alpha`` / ``kcut`` may be overridden
+    explicitly (e.g. to test α-independence).
+
+    Boundary condition. The default epsilon = inf is the tin-foil (conducting)
+    boundary: no surface term and no depolarising field — the appropriate
+    choice for bulk (short-circuited) ferroelectrics and the LAMMPS
+    ``kspace_style ewald`` default. A finite epsilon adds
+    2π k_e |M|² / ((2ε+1) V) with M = Σ q_i r_i; M is not well defined under
+    PBC (it jumps by q·L when an atom is wrapped), so this is only meaningful
+    for unwrapped trajectories and triggers a warning.
+
+    The cell must be charge-neutral: otherwise the k = 0 term diverges and
+    the energy depends on α. A non-neutral charge set raises ValueError.
     """
 
-    # Conversion factor: 1 e^2/Angstrom = 14.3996 eV
-    KE = 14.3996
+    KE = COULOMB_CONSTANT
 
     def __init__(
         self,
         charges:  dict[str, float],  # {element: charge}
-        alpha:    float,             # real/reciprocal space splitting parameter (1/Angstrom)
-        kmax:     int,               # max k-vector index in each direction
-        cutoff:   float,             # real-space cutoff (Angstrom)
-        epsilon:  float = 1.0,       # surface term dielectric: 1.0=vacuum, inf=tinfoil
+        cutoff:   float,             # real-space cutoff r_c (Angstrom)
+        accuracy: float = 1e-6,      # target truncation accuracy δ (0 < δ < 1)
+        epsilon:  float = np.inf,    # surface dielectric: inf = tin-foil
+        alpha:    float | None = None,   # override α (1/Angstrom)
+        kcut:     float | None = None,   # override k_c (1/Angstrom)
     ):
-        """
-        Args:
-            charges:  {element: charge} e.g. {"Pb": 1.38, "Ti": 0.99, "O": -0.79}
-            alpha:    Ewald splitting parameter in 1/Angstrom
-            kmax:     max reciprocal lattice vector index
-            cutoff:   real-space cutoff in Angstrom
-            epsilon:  dielectric constant for surface term (1.0 = vacuum boundary)
-        """
-        self.charges = charges
-        self.alpha   = alpha
-        self.kmax    = kmax
-        self.cutoff  = cutoff
-        self.epsilon = epsilon
+        if cutoff <= 0:
+            raise ValueError(f"Ewald cutoff must be > 0, got {cutoff}.")
+        if not (0.0 < accuracy < 1.0):
+            raise ValueError(f"Ewald accuracy must be in (0, 1), got {accuracy}.")
+        p = np.sqrt(-np.log(accuracy))
+        self.charges  = charges
+        self.cutoff   = float(cutoff)
+        self.accuracy = float(accuracy)
+        self.alpha    = float(alpha) if alpha is not None else p / self.cutoff
+        self.kcut     = float(kcut)  if kcut  is not None else 2.0 * self.alpha * p
+        self.epsilon  = epsilon
+        if not np.isinf(epsilon):
+            warnings.warn(
+                "Ewald with finite epsilon adds a dipole surface term that is not "
+                "invariant under wrapping atoms into the cell; use epsilon=inf "
+                "(tin-foil) for periodic bulk systems.",
+                stacklevel=2,
+            )
 
     def _get_charges(self, species: list[str]) -> np.ndarray:
-        return np.array([self.charges.get(s, 0.0) for s in species])
+        q = np.array([self.charges.get(s, 0.0) for s in species], dtype=float)
+        total = float(q.sum())
+        if abs(total) > 1e-8 * max(1.0, float(np.abs(q).sum())):
+            raise ValueError(
+                f"Ewald requires a charge-neutral cell; net charge = {total:+.6e} e "
+                f"(charges {self.charges}). Adjust charges so Σ n_s q_s = 0."
+            )
+        return q
 
     # ──────────────────────────────────────────────
     # Real space term
@@ -118,25 +152,30 @@ class Ewald(Potential):
 
     def _k_vectors(self, lattice: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         """
-        Generate reciprocal lattice vectors and their squared magnitudes.
+        All reciprocal vectors k = 2π (h, k, l)·B with 0 < |k| <= k_c, where
+        the rows of B = (L⁻¹)ᵀ are the reciprocal vectors b_i (a_i·b_j = δ_ij).
 
-        Result depends only on (lattice, kmax) so we cache by (id(lattice), kmax).
-        Both arrays are read-only outputs and shared across callers.
+        Index range. Since k·a_i = 2π h_i, the projection onto â_i gives
+        |k| >= 2π |h_i| / |a_i|, so |k| <= k_c requires
+            |h_i| <= floor(k_c |a_i| / 2π),
+        the reciprocal-space analogue of the real-space image bound.
+
+        Cached on (lattice bytes, k_c). Returned arrays are shared read-only.
         """
-        key = (lattice.tobytes(), self.kmax)
+        key = (lattice.tobytes(), self.kcut)
         cached = _KVEC_CACHE.get(key)
         if cached is not None:
             return cached
 
-        recip = 2 * np.pi * np.linalg.inv(lattice).T          # (3, 3)
-        rng   = np.arange(-self.kmax, self.kmax + 1)
-        hh, kk, ll = np.meshgrid(rng, rng, rng, indexing="ij")
-        hkl    = np.stack([hh.ravel(), kk.ravel(), ll.ravel()], axis=1)  # ((2k+1)^3, 3)
-        # Drop the (0,0,0) row
-        nonzero = np.any(hkl != 0, axis=1)
-        hkl    = hkl[nonzero]
-        k_vecs = hkl @ recip                                  # (K, 3)
-        k2     = np.einsum("ij,ij->i", k_vecs, k_vecs)        # (K,)
+        lattice = np.asarray(lattice, dtype=float)
+        recip   = 2 * np.pi * np.linalg.inv(lattice).T          # (3, 3) rows = 2π b_i
+        h_max   = np.floor(self.kcut * np.linalg.norm(lattice, axis=1) / (2 * np.pi)).astype(int)
+        rng     = [np.arange(-m, m + 1) for m in h_max]
+        hkl     = np.stack(np.meshgrid(*rng, indexing="ij"), axis=-1).reshape(-1, 3)
+        k_vecs  = hkl @ recip                                   # (K, 3)
+        k2      = np.einsum("ij,ij->i", k_vecs, k_vecs)         # (K,)
+        keep    = (k2 > 0.0) & (k2 <= self.kcut**2)
+        k_vecs, k2 = k_vecs[keep], k2[keep]
         _KVEC_CACHE[key] = (k_vecs, k2)
         return k_vecs, k2
 

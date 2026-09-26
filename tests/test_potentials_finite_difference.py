@@ -117,7 +117,7 @@ def test_fd_bvv(frame):
 def test_fd_ewald(frame):
     ewald = Ewald(
         charges = {"Pb": 1.4, "Ti": 1.0, "O": -0.8},
-        alpha   = 0.3, kmax = 5, cutoff = CUTOFF, epsilon = 1.0,
+        cutoff  = CUTOFF,   # tin-foil, α and k_c from default accuracy
     )
     # Ewald energy is on the ~100 eV scale → larger absolute FD error.
     _check_fd(ewald, frame, _ATOMS, atol=1e-3)

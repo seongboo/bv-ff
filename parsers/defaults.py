@@ -33,7 +33,12 @@ DEFAULT_CONTROLS = {
     },
 
     "extensions": {
-        "use_ewald": 1,
+        "use_ewald":      1,
+        # Ewald real-space cutoff (Å), separate from the short-range cutoff in
+        # parameters.toml, and target accuracy δ. α and k_c follow from these:
+        #   α = √(-ln δ)/r_c,  k_c = 2α√(-ln δ)  (tin-foil boundary).
+        "ewald_cutoff":   8.0,
+        "ewald_accuracy": 1e-6,
     },
 
     "fitting": {

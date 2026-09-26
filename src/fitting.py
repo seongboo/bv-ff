@@ -34,12 +34,69 @@ _LOG_EVERY = 100
 
 
 # ──────────────────────────────────────────────
+# Charge neutrality
+# ──────────────────────────────────────────────
+#
+# Ewald is defined only for a neutral cell (the k = 0 term diverges and the
+# energy becomes α-dependent otherwise). Fitting each species' charge
+# independently would leave the neutral manifold, so one charge — the
+# "dependent" species — is eliminated from the parameter vector:
+#
+#     q_d = -(Σ_{s≠d} n_s q_s) / n_d
+#
+# The dependent species is the most abundant one (ties → alphabetical),
+# i.e. O for oxides. This needs every training frame to share the same
+# composition ratio (checked in ``frames_composition``).
+
+def frames_composition(frames: list[Frame]) -> dict[str, int]:
+    """Species counts of the first frame; raises if any frame's composition is
+    not proportional to it (neutrality by a single constraint would fail)."""
+    from collections import Counter
+    ref = Counter(frames[0].species)
+    tot = sum(ref.values())
+    for fr in frames[1:]:
+        c = Counter(fr.species)
+        n = sum(c.values())
+        if set(c) != set(ref) or any(c[s] * tot != ref[s] * n for s in ref):
+            raise ValueError(
+                "Training frames have different composition ratios "
+                f"({dict(ref)} vs {dict(c)}); charge neutrality cannot be imposed "
+                "with a single dependent charge."
+            )
+    return dict(ref)
+
+
+def dependent_species(composition: dict[str, int]) -> str:
+    """Most abundant species (ties → alphabetical); its charge is eliminated."""
+    return sorted(composition, key=lambda s: (-composition[s], s))[0]
+
+
+def neutralize_charges(charges: dict[str, float], composition: dict[str, int]) -> dict[str, float]:
+    """Return a copy of ``charges`` with the dependent species' charge set so
+    that Σ_s n_s q_s = 0 for ``composition``. Species absent from the
+    composition are left untouched (they do not enter the cell)."""
+    d   = dependent_species(composition)
+    out = dict(charges)
+    rest = sum(n * out.get(s, 0.0) for s, n in composition.items() if s != d)
+    out[d] = -rest / composition[d]
+    return out
+
+
+# ──────────────────────────────────────────────
 # Parameter vector <-> Parameters conversion
 # ──────────────────────────────────────────────
 
-def params_to_vector(params: Parameters, controls_potentials) -> tuple[np.ndarray, list[str]]:
+def params_to_vector(
+    params: Parameters,
+    controls_potentials,
+    composition: dict[str, int] | None = None,
+) -> tuple[np.ndarray, list[str]]:
     """
     Flatten Parameters dataclass into a 1D numpy array for optimization.
+
+    If ``composition`` is given and Coulomb is active, the dependent species'
+    charge (see ``neutralize_charges``) is omitted from the vector; it is
+    reconstructed in ``vector_to_params`` so every trial point is neutral.
 
     Returns:
         vector: (M,) array of parameter values
@@ -49,7 +106,10 @@ def params_to_vector(params: Parameters, controls_potentials) -> tuple[np.ndarra
     pc = controls_potentials
 
     if pc.use_coulomb:
+        skip = dependent_species(composition) if composition else None
         for atom, q in params.coulomb.charges.items():
+            if atom == skip:
+                continue
             vector.append(q)
             keys.append(f"coulomb.{atom}")
 
@@ -100,14 +160,21 @@ def params_to_vector(params: Parameters, controls_potentials) -> tuple[np.ndarra
     return np.array(vector), keys
 
 
-def vector_to_params(vector: np.ndarray, keys: list[str], params: Parameters) -> Parameters:
+def vector_to_params(
+    vector: np.ndarray,
+    keys: list[str],
+    params: Parameters,
+    composition: dict[str, int] | None = None,
+) -> Parameters:
     """
     Reconstruct Parameters dataclass from a 1D numpy array.
 
     Args:
-        vector: (M,) optimized parameter values
-        keys:   parameter names from params_to_vector
-        params: original Parameters (used as template for structure)
+        vector:      (M,) optimized parameter values
+        keys:        parameter names from params_to_vector
+        params:      original Parameters (used as template for structure)
+        composition: if given, the dependent charge is recomputed so the
+                     cell is neutral (must match the params_to_vector call)
 
     Returns:
         Updated Parameters dataclass
@@ -158,6 +225,9 @@ def vector_to_params(vector: np.ndarray, keys: list[str], params: Parameters) ->
 
         elif parts[0] == "angle":
             p.angle.k = float(val)
+
+    if composition and p.coulomb.charges:
+        p.coulomb.charges = neutralize_charges(p.coulomb.charges, composition)
 
     return p
 
@@ -332,7 +402,24 @@ def fit(
         fitted_params: optimized Parameters dataclass
         best_loss:     final loss value
     """
-    x0, keys = params_to_vector(params, controls_potentials)
+    # Charge neutrality: eliminate the dependent charge from the vector and
+    # project the starting charges onto the neutral manifold.
+    composition = None
+    if controls_potentials.use_coulomb and params.coulomb.charges:
+        composition = frames_composition(train_frames)
+        neutral = neutralize_charges(params.coulomb.charges, composition)
+        d = dependent_species(composition)
+        if abs(neutral[d] - params.coulomb.charges.get(d, 0.0)) > 1e-12:
+            logger.info(
+                f"Charge neutrality: initial q_{d} = {params.coulomb.charges.get(d, 0.0):+.6f} "
+                f"→ {neutral[d]:+.6f} (composition {composition})"
+            )
+        import copy
+        params = copy.deepcopy(params)
+        params.coulomb.charges = neutral
+        logger.info(f"Charge neutrality: q_{d} is dependent (not fitted).")
+
+    x0, keys = params_to_vector(params, controls_potentials, composition)
     bounds   = build_bounds(keys)
 
     logger.info(f"Fitting {len(keys)} parameters with Simulated Annealing ...")
@@ -372,7 +459,7 @@ def fit(
         # Label each per-iter progress bar with the upcoming iter number so the
         # user can see which evaluation is in flight.
         next_iter = state["iter"] + 1
-        current_params = vector_to_params(x, keys, params)
+        current_params = vector_to_params(x, keys, params, composition)
         bvff           = bvff_builder(current_params)
         # progress=False inside the SA inner loop — per-frame progress was
         # flooding the log and slightly slowing things via per-iter I/O.
@@ -463,7 +550,7 @@ def fit(
                 f"{time.time() - t_polish:.1f}s)"
             )
 
-    fitted_params = vector_to_params(best_x, keys, params)
+    fitted_params = vector_to_params(best_x, keys, params, composition)
     logger.info(
         f"Fitting completed in {time.time() - t_fit_start:.1f}s "
         f"| best loss = {best_loss:.6f}"

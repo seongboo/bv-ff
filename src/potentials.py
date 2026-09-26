@@ -11,6 +11,10 @@ import numpy as np
 # = 1602.1766208 kBar.
 EV_PER_ANG3_TO_KBAR = 1602.1766208
 
+# Coulomb constant e²/(4πε₀) in eV·Å, so that k_e q_i q_j / r is in eV for
+# charges in units of e and r in Å. Shared by Coulomb and Ewald.
+COULOMB_CONSTANT = 14.3996454784
+
 
 # ──────────────────────────────────────────────
 # Neighbor list cache
@@ -230,9 +234,9 @@ class Potential(ABC):
 
 class Coulomb(Potential):
     """
-    Coulomb energy: E_c = ½ Σ_i Σ_(j,n) q_i q_j / r_ij,n   (all images within cutoff)
-    Direct truncated summation (use Ewald for long-range accuracy).
-    NOTE: returns e²/Å, not eV (no k_e factor) — tracked separately.
+    Coulomb energy: E_c = ½ k_e Σ_i Σ_(j,n) q_i q_j / r_ij,n   (all images within cutoff)
+    Direct truncated summation in eV (k_e = COULOMB_CONSTANT). The truncated
+    1/r sum is not convergent in the cutoff; use Ewald for periodic systems.
     """
 
     def __init__(self, charges: dict[str, float], cutoff: float):
@@ -253,7 +257,7 @@ class Coulomb(Potential):
             return 0.0
         q     = self._charge_vector(species)
         r     = np.linalg.norm(r_vecs, axis=1)
-        return 0.5 * float(np.sum(q[i_idx] * q[j_idx] / r))
+        return 0.5 * COULOMB_CONSTANT * float(np.sum(q[i_idx] * q[j_idx] / r))
 
     def forces(self, lattice, species, positions) -> np.ndarray:
         n = len(species)
@@ -265,7 +269,7 @@ class Coulomb(Potential):
         r  = np.linalg.norm(r_vecs, axis=1)
         # f_i = -dE/dr_i. With r_vec = r_j - r_i, dr/dr_i = -r_vec/r, so the
         # force on i from pair (i,j) is -q_i q_j r_vec/r^3 (per unit pair).
-        df = -(q[i_idx] * q[j_idx] / r**3)[:, None] * r_vecs
+        df = -(COULOMB_CONSTANT * q[i_idx] * q[j_idx] / r**3)[:, None] * r_vecs
         np.add.at(f, i_idx, df)
         return f
 
@@ -280,7 +284,7 @@ class Coulomb(Potential):
             return np.zeros((3, 3))
         q    = self._charge_vector(species)
         r    = np.linalg.norm(r_vecs, axis=1)
-        df   = -(q[i_idx] * q[j_idx] / r**3)[:, None] * r_vecs   # force on i per entry
+        df   = -(COULOMB_CONSTANT * q[i_idx] * q[j_idx] / r**3)[:, None] * r_vecs   # force on i per entry
         return 0.5 * np.einsum("ma,mb->ab", df, r_vecs) / volume
 
 

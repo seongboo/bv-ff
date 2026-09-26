@@ -19,7 +19,9 @@ class PotentialControls:
 
 @dataclass
 class ExtensionControls:
-    use_ewald: bool = True
+    use_ewald:      bool  = True
+    ewald_cutoff:   float = 8.0    # Ewald real-space cutoff r_c (Å), independent of short-range cutoff
+    ewald_accuracy: float = 1e-6   # target truncation accuracy δ → α = √(-ln δ)/r_c, k_c = 2α√(-ln δ)
 
 
 @dataclass
@@ -81,7 +83,9 @@ def _parse_extensions(data: dict) -> ExtensionControls:
     e = data.get("extensions", {})
     d = DEFAULT_CONTROLS["extensions"]
     return ExtensionControls(
-        use_ewald = bool(e.get("use_ewald", d["use_ewald"])),
+        use_ewald      = bool (e.get("use_ewald",      d["use_ewald"])),
+        ewald_cutoff   = float(e.get("ewald_cutoff",   d["ewald_cutoff"])),
+        ewald_accuracy = float(e.get("ewald_accuracy", d["ewald_accuracy"])),
     )
 
 
@@ -149,6 +153,15 @@ def _validate(controls: Controls) -> None:
     if controls.potentials.bv_form not in ("power", "exp"):
         raise ValueError(
             f"potentials.bv_form must be 'power' or 'exp', got '{controls.potentials.bv_form}'."
+        )
+
+    if controls.extensions.ewald_cutoff <= 0:
+        raise ValueError(
+            f"extensions.ewald_cutoff must be > 0, got {controls.extensions.ewald_cutoff}."
+        )
+    if not (0.0 < controls.extensions.ewald_accuracy < 1.0):
+        raise ValueError(
+            f"extensions.ewald_accuracy must be in (0, 1), got {controls.extensions.ewald_accuracy}."
         )
 
     if not (0.0 < controls.train_ratio < 1.0):

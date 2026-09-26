@@ -144,7 +144,9 @@ def build_toml(args: argparse.Namespace) -> str:
     out.append("\n")
 
     out.append("[extensions]\n")
-    out.append(f"use_ewald = {_b(args.ewald)}\n")
+    out.append(f"use_ewald      = {_b(args.ewald)}\n")
+    out.append(f"ewald_cutoff   = {args.ewald_cutoff}\n")
+    out.append(f"ewald_accuracy = {args.ewald_accuracy}\n")
     out.append("\n")
 
     out.append("[fitting]\n")
@@ -229,6 +231,10 @@ def _build_parser() -> argparse.ArgumentParser:
     # Extensions
     g = p.add_argument_group("extensions")
     g.add_argument("--no-ewald", dest="ewald", action="store_false")
+    g.add_argument("--ewald-cutoff", dest="ewald_cutoff", type=float, default=8.0,
+                   help="Ewald real-space cutoff in Å (default 8.0)")
+    g.add_argument("--ewald-accuracy", dest="ewald_accuracy", type=float, default=1e-6,
+                   help="Ewald target accuracy δ (default 1e-6)")
     p.set_defaults(ewald=True)
 
     # Fitting
