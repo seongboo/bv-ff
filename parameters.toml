@@ -1,0 +1,57 @@
+# PbTiO3 initial parameters.
+# Partial charges are chosen to be cell-neutral:
+#   8*Pb + 8*Ti + 24*O = 8*(+1.4) + 8*(+1.0) + 24*(-0.8) = 0
+# Cation-cation pairs (Pb-Pb, Pb-Ti, Ti-Ti) are intentionally omitted from
+# BV (bond valence is defined only for cation→anion bonds). Repulsive
+# cation-cation pairs are also omitted; the parsers treat missing pairs as
+# zero contribution.
+cutoff = 6.0
+
+[coulomb]
+Pb =  1.4
+Ti =  1.0
+O  = -0.8
+
+[repulsive]
+O-O  = 1.83
+O-Pb = 2.17
+O-Ti = 1.28
+
+[BV.species.Pb]
+V0 = 2.0
+S  = 0.5
+
+[BV.species.Ti]
+V0 = 4.0
+S  = 0.5
+
+[BV.species.O]
+V0 = 2.0
+S  = 0.5
+
+# Only cation-O bond valences are physically meaningful.
+# C is used when controls bv_form="power"; b (decay length, Å) when "exp".
+[BV.pairs.O-Pb]
+r0 = 2.06
+C  = 6.0
+b  = 0.37
+
+[BV.pairs.O-Ti]
+r0 = 1.81
+C  = 5.2
+b  = 0.37
+
+[BVV.Pb]
+W0 = 0.5
+D  = 0.1
+
+[BVV.Ti]
+W0 = 0.3
+D  = 0.1
+
+[BVV.O]
+W0 = 0.0
+D  = 0.0
+
+[angle]
+k = 1.0
