@@ -83,6 +83,10 @@ DEFAULT_CONTROLS = {
 
 DEFAULT_PARAMETERS = {
     "cutoff": 6.0,
+    # Width Δ of the C² switching region [cutoff − Δ, cutoff] applied to the
+    # short-range terms (Repulsive/Buckingham pair energy, BV/BVV bond valence
+    # V_ij). 0 = hard cutoff (energy discontinuous at the cutoff).
+    "cutoff_width": 1.0,
 
     "coulomb": {},      # atom: charge
 

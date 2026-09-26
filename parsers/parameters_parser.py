@@ -73,6 +73,7 @@ class AngleParams:
 @dataclass
 class Parameters:
     cutoff:     float            = DEFAULT_PARAMETERS["cutoff"]
+    cutoff_width: float          = DEFAULT_PARAMETERS["cutoff_width"]
     coulomb:    CoulombParams    = field(default_factory=CoulombParams)
     repulsive:  RepulsiveParams  = field(default_factory=RepulsiveParams)
     buckingham: BuckinghamParams = field(default_factory=BuckinghamParams)
@@ -190,7 +191,7 @@ def save_parameters(params: Parameters, filepath: str) -> None:
         params:   Parameters dataclass
         filepath: output path for parameters.toml
     """
-    data: dict = {"cutoff": params.cutoff}
+    data: dict = {"cutoff": params.cutoff, "cutoff_width": params.cutoff_width}
 
     if params.coulomb.charges:
         data["coulomb"] = {atom: q for atom, q in params.coulomb.charges.items()}
@@ -294,6 +295,10 @@ def _parse_angle(data: dict) -> AngleParams:
 def _validate(params: Parameters) -> None:
     if params.cutoff <= 0:
         raise ValueError(f"cutoff must be > 0, got {params.cutoff}.")
+    if not (0.0 <= params.cutoff_width < params.cutoff):
+        raise ValueError(
+            f"cutoff_width must satisfy 0 <= cutoff_width < cutoff, got {params.cutoff_width}."
+        )
 
     for pair, b in params.repulsive.B.items():
         if b < 0:
@@ -374,6 +379,7 @@ def parse_parameters(
     d = DEFAULT_PARAMETERS
     params = Parameters(
         cutoff     = float(data.get("cutoff", d["cutoff"])),
+        cutoff_width = float(data.get("cutoff_width", d["cutoff_width"])),
         coulomb    = _parse_coulomb(data),
         repulsive  = _parse_repulsive(data),
         buckingham = _parse_buckingham(data),

@@ -30,6 +30,7 @@ from scripts.analysis import run_analysis
 def build_bvff(controls: Controls, params: Parameters, logger: logging.Logger = None) -> BVFF:
     terms: list[Potential] = []
     cutoff = params.cutoff
+    width  = params.cutoff_width
     pc     = controls.potentials
     ext    = controls.extensions
 
@@ -54,7 +55,7 @@ def build_bvff(controls: Controls, params: Parameters, logger: logging.Logger = 
             if logger: logger.info("Potential: Coulomb (direct)")
 
     if pc.use_repulsive:
-        terms.append(Repulsive(B=params.repulsive.B, cutoff=cutoff))
+        terms.append(Repulsive(B=params.repulsive.B, cutoff=cutoff, cutoff_width=width))
         if logger: logger.info("Potential: Repulsive")
 
     if pc.use_buckingham:
@@ -62,7 +63,7 @@ def build_bvff(controls: Controls, params: Parameters, logger: logging.Logger = 
             pair: {"A": bp.A, "rho": bp.rho, "C": bp.C}
             for pair, bp in params.buckingham.pairs.items()
         }
-        terms.append(Buckingham(params=buck_params, cutoff=cutoff))
+        terms.append(Buckingham(params=buck_params, cutoff=cutoff, cutoff_width=width))
         if logger: logger.info("Potential: Buckingham (Born-Mayer + dispersion)")
 
     if pc.use_BV:
@@ -79,6 +80,7 @@ def build_bvff(controls: Controls, params: Parameters, logger: logging.Logger = 
             pair_params    = pair_params,
             cutoff         = cutoff,
             form           = pc.bv_form,
+            cutoff_width   = width,
         ))
         if logger: logger.info(f"Potential: Bond Valence (BV, form={pc.bv_form})")
 
@@ -96,6 +98,7 @@ def build_bvff(controls: Controls, params: Parameters, logger: logging.Logger = 
             pair_params    = pair_params,
             cutoff         = cutoff,
             form           = pc.bv_form,
+            cutoff_width   = width,
         ))
         if logger: logger.info(f"Potential: Bond Valence Vector (BVV, form={pc.bv_form})")
 

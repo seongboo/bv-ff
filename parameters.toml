@@ -6,6 +6,9 @@
 # cation-cation pairs are also omitted; the parsers treat missing pairs as
 # zero contribution.
 cutoff = 6.0
+# C² switching over [cutoff - cutoff_width, cutoff] for Repulsive/Buckingham/BV/BVV
+# (0 = hard cutoff). Ewald has its own cutoff/accuracy in controls.toml.
+cutoff_width = 1.0
 
 [coulomb]
 Pb =  1.4

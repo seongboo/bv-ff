@@ -17,6 +17,31 @@ COULOMB_CONSTANT = 14.3996454784
 
 
 # ──────────────────────────────────────────────
+# Smooth cutoff (quintic switching)
+# ──────────────────────────────────────────────
+
+def switching(r: np.ndarray, cutoff: float, width: float) -> tuple[np.ndarray, np.ndarray]:
+    """
+    C² switching function S(r) and dS/dr on [r_s, r_c], r_s = r_c − width:
+
+        x = (r − r_s)/width,   S = 1 − 10x³ + 15x⁴ − 6x⁵   (0 ≤ x ≤ 1)
+        S = 1 for r ≤ r_s,  S = 0 for r ≥ r_c,
+        dS/dr = −30 x² (1 − x)² / width.
+
+    S, S′ and S″ are continuous at both ends (S′ = S″ = 0 there), so a
+    switched quantity φ·S is C² whenever φ is. width ≤ 0 means a hard
+    cutoff (S ≡ 1 inside the neighbor list).
+    """
+    r = np.asarray(r, dtype=float)
+    if width <= 0.0:
+        return np.ones_like(r), np.zeros_like(r)
+    x  = np.clip((r - (cutoff - width)) / width, 0.0, 1.0)
+    S  = 1.0 - x**3 * (10.0 - 15.0 * x + 6.0 * x**2)
+    dS = -30.0 * x**2 * (1.0 - x) ** 2 / width
+    return S, dS
+
+
+# ──────────────────────────────────────────────
 # Neighbor list cache
 # ──────────────────────────────────────────────
 #
@@ -301,14 +326,25 @@ class Repulsive(Potential):
     B_ij is a length (Å); E_r is in eV. Pairs without a B entry contribute 0.
     """
 
-    def __init__(self, B: dict[str, float], cutoff: float):
+    def __init__(self, B: dict[str, float], cutoff: float, cutoff_width: float = 0.0):
         """
         Args:
-            B:      {pair: B in Å} e.g. {"Pb-O": 2.17, "Ti-O": 1.28, "O-O": 1.83}
-            cutoff: cutoff distance in Angstrom
+            B:            {pair: B in Å} e.g. {"Pb-O": 2.17, "Ti-O": 1.28, "O-O": 1.83}
+            cutoff:       cutoff distance in Angstrom
+            cutoff_width: width of the C² switching region [cutoff − width, cutoff]
+                          (0 = hard cutoff)
         """
-        self.B      = B
-        self.cutoff = cutoff
+        self.B            = B
+        self.cutoff       = cutoff
+        self.cutoff_width = cutoff_width
+
+    def _phi_dphi(self, bij: np.ndarray, r: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        """Switched pair energy φS and its radial derivative (φS)′,
+        φ = (B/r)^12, φ′ = −12 B^12 / r^13."""
+        S, dS = switching(r, self.cutoff, self.cutoff_width)
+        phi   = (bij / r) ** 12
+        dphi  = -12.0 * phi / r
+        return phi * S, dphi * S + phi * dS
 
     def _get_B(self, si: str, sj: str) -> float:
         key1 = f"{si}-{sj}"
@@ -334,7 +370,8 @@ class Repulsive(Potential):
         codes, B_table = self._pair_B_table(species)
         r    = np.linalg.norm(r_vecs, axis=1)
         bij  = B_table[codes[i_idx], codes[j_idx]]
-        return 0.5 * float(np.sum((bij / r) ** 12))
+        phi, _ = self._phi_dphi(bij, r)
+        return 0.5 * float(np.sum(phi))
 
     def forces(self, lattice, species, positions) -> np.ndarray:
         n = len(species)
@@ -344,12 +381,13 @@ class Repulsive(Potential):
             return f
         codes, B_table = self._pair_B_table(species)
         # Full ordered list: the force on i is the sum over entries (i, j, n).
-        # φ(r) = (B/r)^12, φ'(r) = -12 B^12 / r^13. With r_vec = r_j + n·L - r_i,
-        # ∂r/∂r_i = -r̂, so f_i = -∂E/∂r_i = φ'(r) r̂ = -12 B^12 r_vec / r^14
-        # per entry. Self-image entries (i, i, ±n) cancel pairwise.
+        # With r_vec = r_j + n·L - r_i, ∂r/∂r_i = -r̂, so
+        # f_i = -∂E/∂r_i = (φS)′(r) r̂ per entry (hard cutoff: φ′ = -12 B^12/r^13).
+        # Self-image entries (i, i, ±n) cancel pairwise.
         r    = np.linalg.norm(r_vecs, axis=1)
         bij  = B_table[codes[i_idx], codes[j_idx]]
-        df   = -(12.0 * bij**12 / r**14)[:, None] * r_vecs
+        _, dphi = self._phi_dphi(bij, r)
+        df   = (dphi / r)[:, None] * r_vecs
         np.add.at(f, i_idx, df)
         return f
 
@@ -364,7 +402,8 @@ class Repulsive(Potential):
         codes, B_table = self._pair_B_table(species)
         r    = np.linalg.norm(r_vecs, axis=1)
         bij  = B_table[codes[i_idx], codes[j_idx]]
-        df   = -(12.0 * bij**12 / r**14)[:, None] * r_vecs  # force on i per entry
+        _, dphi = self._phi_dphi(bij, r)
+        df   = (dphi / r)[:, None] * r_vecs                # force on i per entry
         return 0.5 * np.einsum("ma,mb->ab", df, r_vecs) / volume
 
 
@@ -382,15 +421,16 @@ class Buckingham(Potential):
     for ionic oxides and shell-model fits such as PbTiO3.
     """
 
-    def __init__(self, params: dict[str, dict], cutoff: float):
+    def __init__(self, params: dict[str, dict], cutoff: float, cutoff_width: float = 0.0):
         """
         Args:
             params: {pair: {"A": .., "rho": .., "C": ..}}, e.g.
                     {"O-Ti": {"A": 877.2, "rho": 0.38, "C": 9.0}}
             cutoff: cutoff distance in Angstrom
         """
-        self.params = params
-        self.cutoff = cutoff
+        self.params       = params
+        self.cutoff       = cutoff
+        self.cutoff_width = cutoff_width   # C² switching width (0 = hard cutoff)
 
     def _get_pair(self, si: str, sj: str) -> dict | None:
         return self.params.get(f"{si}-{sj}", self.params.get(f"{sj}-{si}", None))
@@ -423,7 +463,8 @@ class Buckingham(Potential):
         A    = A_tbl[codes[i_idx], codes[j_idx]]
         rho  = rho_tbl[codes[i_idx], codes[j_idx]]
         C    = C_tbl[codes[i_idx], codes[j_idx]]
-        return 0.5 * float(np.sum(A * np.exp(-r / rho) - C / r**6))
+        S, _ = switching(r, self.cutoff, self.cutoff_width)
+        return 0.5 * float(np.sum((A * np.exp(-r / rho) - C / r**6) * S))
 
     def _pair_force_df(self, species, i, j, rv, r):
         """Per-pair force on atom i (central): f_i = phi'(r) r_vec / r."""
@@ -431,9 +472,11 @@ class Buckingham(Potential):
         A   = A_tbl[codes[i], codes[j]]
         rho = rho_tbl[codes[i], codes[j]]
         C   = C_tbl[codes[i], codes[j]]
-        # phi'(r) = -(A/rho) exp(-r/rho) + 6 C / r^7
+        # phi'(r) = -(A/rho) exp(-r/rho) + 6 C / r^7; switched: (φS)′ = φ′S + φS′
+        phi  = A * np.exp(-r / rho) - C / r**6
         dphi = -(A / rho) * np.exp(-r / rho) + 6.0 * C / r**7
-        return (dphi / r)[:, None] * rv
+        S, dS = switching(r, self.cutoff, self.cutoff_width)
+        return ((dphi * S + phi * dS) / r)[:, None] * rv
 
     def forces(self, lattice, species, positions) -> np.ndarray:
         n = len(species)
@@ -481,6 +524,7 @@ class BV(Potential):
         pair_params:    dict[str, dict],   # {pair: {r0, C, b}}
         cutoff:         float,
         form:           str = "power",     # "power" | "exp"
+        cutoff_width:   float = 0.0,       # C² switching width on V_ij (0 = hard)
     ):
         if form not in ("power", "exp"):
             raise ValueError(f"BV form must be 'power' or 'exp', got '{form}'.")
@@ -488,6 +532,7 @@ class BV(Potential):
         self.pair_params    = pair_params
         self.cutoff         = cutoff
         self.form           = form
+        self.cutoff_width   = cutoff_width
 
     def _get_pair(self, si: str, sj: str) -> dict | None:
         key1 = f"{si}-{sj}"
@@ -527,14 +572,17 @@ class BV(Potential):
 
     def _valence_and_deriv(self, r, r0, C, b):
         """Bond valence V_ij and its radial derivative dV/dr for the active
-        ``form``. Vectorised over pairs."""
+        ``form``, multiplied by the C² switching function (V → V·S,
+        V′ → V′S + V·S′) so that V_i, W_i and hence E_BV are C² at the
+        cutoff. Vectorised over pairs."""
         if self.form == "exp":
             Vij  = np.exp((r0 - r) / b)
             dVdr = -Vij / b
         else:  # power
             Vij  = (r0 / r) ** C
             dVdr = -C * r0**C / r**(C + 1)
-        return Vij, dVdr
+        S, dS = switching(r, self.cutoff, self.cutoff_width)
+        return Vij * S, dVdr * S + Vij * dS
 
     def _species_tables(self, species: list[str]) -> tuple[np.ndarray, np.ndarray]:
         """Per-atom V0 and S arrays. Unparameterized atoms get S=0 so they
@@ -654,6 +702,7 @@ class BVV(Potential):
         pair_params:    dict[str, dict],   # {pair: {r0, C, b}} (same as BV)
         cutoff:         float,
         form:           str = "power",     # "power" | "exp" (same as BV)
+        cutoff_width:   float = 0.0,       # C² switching width on V_ij (0 = hard)
     ):
         if form not in ("power", "exp"):
             raise ValueError(f"BVV form must be 'power' or 'exp', got '{form}'.")
@@ -661,6 +710,7 @@ class BVV(Potential):
         self.pair_params    = pair_params
         self.cutoff         = cutoff
         self.form           = form
+        self.cutoff_width   = cutoff_width
 
     def _get_pair(self, si: str, sj: str) -> dict | None:
         key1 = f"{si}-{sj}"
@@ -690,14 +740,15 @@ class BVV(Potential):
         return codes, r0_tbl, C_tbl, b_tbl
 
     def _valence_and_deriv(self, r, r0, C, b):
-        """Bond valence V_ij and dV/dr for the active ``form`` (see BV)."""
+        """Switched bond valence V_ij·S and its derivative (see BV)."""
         if self.form == "exp":
             Vij  = np.exp((r0 - r) / b)
             dVdr = -Vij / b
         else:
             Vij  = (r0 / r) ** C
             dVdr = -C * r0**C / r**(C + 1)
-        return Vij, dVdr
+        S, dS = switching(r, self.cutoff, self.cutoff_width)
+        return Vij * S, dVdr * S + Vij * dS
 
     def _species_tables(self, species: list[str]) -> tuple[np.ndarray, np.ndarray]:
         n  = len(species)
