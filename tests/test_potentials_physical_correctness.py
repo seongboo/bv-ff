@@ -263,3 +263,63 @@ def test_frames_composition_rejects_mixed_ratios(frame):
     other = replace(frame, species=["Pb"] * 8 + ["Ti"] * 8 + ["O"] * 23 + ["Pb"])
     with pytest.raises(ValueError, match="composition"):
         frames_composition([frame, other])
+
+
+# ──────────────────────────────────────────────
+# 6. Functional forms against closed-form cases
+# ──────────────────────────────────────────────
+
+def _dimer(d, box=20.0):
+    """Ti at the origin, O at distance d along x, in a cubic box large enough
+    that no periodic image is inside the cutoff."""
+    L = np.eye(3) * box
+    x = np.array([[0.0, 0.0, 0.0], [d / box, 0.0, 0.0]])
+    return L, ["Ti", "O"], x
+
+
+def test_repulsive_dimer_closed_form():
+    """E_r = (B/d)^12 and |F| = 12 B^12 / d^13, repulsive (pushes atoms apart)."""
+    from src.potentials import Repulsive
+    B, d = 1.28, 1.9
+    L, sp, x = _dimer(d)
+    rep = Repulsive({"O-Ti": B}, cutoff=6.0)
+    assert rep.energy(L, sp, x) == pytest.approx((B / d) ** 12, rel=1e-12)
+    f = rep.forces(L, sp, x)
+    fmag = 12.0 * B**12 / d**13
+    np.testing.assert_allclose(f[1], [ fmag, 0, 0], rtol=1e-12, atol=1e-15)   # O pushed to +x
+    np.testing.assert_allclose(f[0], [-fmag, 0, 0], rtol=1e-12, atol=1e-15)
+
+
+@pytest.mark.parametrize("form", ["power", "exp"])
+def test_bv_only_parameterized_pairs(frame, params, form):
+    """Bond valence sums include only pairs with BV parameters (cation–O).
+    Compare get_valence with an explicit sum restricted to those pairs."""
+    from src.potentials import BV
+    L, sp, x = frame.lattice, frame.species, frame.positions
+    pp = {k: {"r0": v.r0, "C": v.C, "b": v.b} for k, v in params.BV.pairs.items()}
+    ss = {a: {"V0": s.V0, "S": s.S} for a, s in params.BV.species.items()}
+    bv = BV(ss, pp, cutoff=6.0, form=form)
+    V  = bv.get_valence(L, sp, x)
+
+    i, j, rv = bv._neighbors(L, x, 6.0)
+    r = np.linalg.norm(rv, axis=1)
+    V_ref = np.zeros(len(sp))
+    for a, b_, rr in zip(i, j, r):
+        p = pp.get(f"{sp[a]}-{sp[b_]}") or pp.get(f"{sp[b_]}-{sp[a]}")
+        if p is None:
+            continue
+        V_ref[a] += (p["r0"] / rr) ** p["C"] if form == "power" else np.exp((p["r0"] - rr) / p["b"])
+    np.testing.assert_allclose(V, V_ref, rtol=1e-12, atol=1e-14)
+
+
+def test_bvv_exp_ignores_unparameterized_pairs():
+    """A lone cation–cation pair (no BV parameters) must give W = 0 and zero
+    force in the exp form."""
+    from src.potentials import BVV
+    L = np.eye(3) * 20.0
+    x = np.array([[0.0, 0.0, 0.0], [3.9 / 20.0, 0.0, 0.0]])
+    bvv = BVV({"Pb": {"W0": 0.5, "D": 0.1}, "Ti": {"W0": 0.3, "D": 0.1}},
+              {"O-Ti": {"r0": 1.8, "C": 5.2, "b": 0.37}}, cutoff=6.0, form="exp")
+    W = bvv.get_bvv(L, ["Pb", "Ti"], x)
+    assert np.all(W == 0.0)
+    assert np.all(bvv.forces(L, ["Pb", "Ti"], x) == 0.0)

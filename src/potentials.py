@@ -294,13 +294,17 @@ class Coulomb(Potential):
 
 class Repulsive(Potential):
     """
-    Short-range repulsive energy: E_r = ½ Σ_i Σ_(j,n) B_ij / r_ij,n^12
+    Short-range repulsive energy (BVMD form, Liu–Grinberg–Rappe):
+
+        E_r = ½ Σ_i Σ_(j,n) (B_ij / r_ij,n)^12
+
+    B_ij is a length (Å); E_r is in eV. Pairs without a B entry contribute 0.
     """
 
     def __init__(self, B: dict[str, float], cutoff: float):
         """
         Args:
-            B:      {pair: B} e.g. {"Pb-O": 2.17, "Ti-O": 1.28, "O-O": 1.83}
+            B:      {pair: B in Å} e.g. {"Pb-O": 2.17, "Ti-O": 1.28, "O-O": 1.83}
             cutoff: cutoff distance in Angstrom
         """
         self.B      = B
@@ -330,7 +334,7 @@ class Repulsive(Potential):
         codes, B_table = self._pair_B_table(species)
         r    = np.linalg.norm(r_vecs, axis=1)
         bij  = B_table[codes[i_idx], codes[j_idx]]
-        return 0.5 * float(np.sum(bij / r**12))
+        return 0.5 * float(np.sum((bij / r) ** 12))
 
     def forces(self, lattice, species, positions) -> np.ndarray:
         n = len(species)
@@ -340,12 +344,12 @@ class Repulsive(Potential):
             return f
         codes, B_table = self._pair_B_table(species)
         # Full ordered list: the force on i is the sum over entries (i, j, n).
-        # f_i = -dE/dr_i. With r_vec = r_j + n·L - r_i, dE/dr_i = +12 B r_vec / r^14,
-        # so f_i = -12 B r_vec / r^14 per entry. Self-image entries (i, i, ±n)
-        # cancel pairwise, as they must.
+        # φ(r) = (B/r)^12, φ'(r) = -12 B^12 / r^13. With r_vec = r_j + n·L - r_i,
+        # ∂r/∂r_i = -r̂, so f_i = -∂E/∂r_i = φ'(r) r̂ = -12 B^12 r_vec / r^14
+        # per entry. Self-image entries (i, i, ±n) cancel pairwise.
         r    = np.linalg.norm(r_vecs, axis=1)
         bij  = B_table[codes[i_idx], codes[j_idx]]
-        df   = -(12.0 * bij / r**14)[:, None] * r_vecs
+        df   = -(12.0 * bij**12 / r**14)[:, None] * r_vecs
         np.add.at(f, i_idx, df)
         return f
 
@@ -360,7 +364,7 @@ class Repulsive(Potential):
         codes, B_table = self._pair_B_table(species)
         r    = np.linalg.norm(r_vecs, axis=1)
         bij  = B_table[codes[i_idx], codes[j_idx]]
-        df   = -(12.0 * bij / r**14)[:, None] * r_vecs  # force on i per entry
+        df   = -(12.0 * bij**12 / r**14)[:, None] * r_vecs  # force on i per entry
         return 0.5 * np.einsum("ma,mb->ab", df, r_vecs) / volume
 
 
@@ -496,17 +500,20 @@ class BV(Potential):
     def _pair_tables(self, species: list[str]) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         """Per-atom species codes + (K,K) r0, C and b lookup tables.
 
-        Unparameterized pairs get r0=0, C=1, b=1; combined with the per-atom
-        S=0 fallback for unparameterized atoms they contribute zero
-        energy/force without needing an explicit mask. (For the exp form an
-        unparameterized pair gives exp((0-r)/1) which is then scattered onto
-        atoms whose S=0, so it still cancels.)
+        Unparameterized pairs (cation–cation, O–O, …) must give V_ij = 0 and
+        dV_ij/dr = 0 in either form, because they would otherwise add to the
+        valence of atoms whose S ≠ 0. The r0 sentinel achieves this without a
+        mask (C = b = 1):
+          power: r0 = 0    → (0/r)^1 = 0,            dV/dr = -1·0/r² = 0
+          exp:   r0 = -inf → exp((-inf - r)/1) = 0,   dV/dr = -0/1   = 0
+        (The earlier r0 = 0 for both forms gave exp(-r) ≠ 0 for the exp form,
+        i.e. spurious valence of ~0.3 v.u. on Pb/Ti and ~0.6 v.u. on O.)
         """
         uniq    = sorted(set(species))
         code_of = {s: i for i, s in enumerate(uniq)}
         codes   = np.fromiter((code_of[s] for s in species), dtype=np.int64, count=len(species))
         K       = len(uniq)
-        r0_tbl  = np.zeros((K, K))
+        r0_tbl  = np.full((K, K), -np.inf if self.form == "exp" else 0.0)
         C_tbl   = np.ones((K, K))
         b_tbl   = np.ones((K, K))
         for a, sa in enumerate(uniq):
@@ -664,12 +671,13 @@ class BVV(Potential):
         return (r0 / r) ** C
 
     def _pair_tables(self, species: list[str]) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-        """Per-atom species codes + (K,K) r0, C and b tables (same shape as BV)."""
+        """Per-atom species codes + (K,K) r0, C and b tables (same as BV,
+        including the r0 sentinel that zeroes unparameterized pairs)."""
         uniq    = sorted(set(species))
         code_of = {s: i for i, s in enumerate(uniq)}
         codes   = np.fromiter((code_of[s] for s in species), dtype=np.int64, count=len(species))
         K       = len(uniq)
-        r0_tbl  = np.zeros((K, K))
+        r0_tbl  = np.full((K, K), -np.inf if self.form == "exp" else 0.0)
         C_tbl   = np.ones((K, K))
         b_tbl   = np.ones((K, K))
         for a, sa in enumerate(uniq):

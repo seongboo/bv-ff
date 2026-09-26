@@ -87,11 +87,13 @@ def test_repulsive(frame):
     rep = Repulsive(B={"O-O": 1.83, "O-Pb": 2.17, "O-Ti": 1.28}, cutoff=CUTOFF)
     e = rep.energy(frame.lattice, frame.species, frame.positions)
     f = rep.forces(frame.lattice, frame.species, frame.positions)
-    assert e == pytest.approx(2.565975639912134e-02, abs=ATOL)
+    assert e == pytest.approx(7.698420674672065e+00, abs=ATOL)
+    # Functional form changed to the BVMD (B/r)^12 (was B/r^12, which made the
+    # term ~B^12 ≈ 10^3–10^4 × too small); snapshot re-captured.
     # Forces fixed in commit "potentials: remove pair double-count in
     # Repulsive/Ewald-real forces"; previous (buggy) values were exactly 2×.
     # Then sign flipped in a follow-up: forces() returns f = -∂E/∂x.
-    _check_array(f, 4.056860656333700e-02, 1.293436894556030e-02, 1.691355389077387e-17)
+    _check_array(f, 7.653934644391810e+00, 2.738716070115037e+00, 1.498801083243961e-15)
 
 
 # ──────────────────────────────────────────────

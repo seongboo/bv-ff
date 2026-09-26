@@ -318,7 +318,7 @@ def build_bounds(keys: list[str]) -> list[tuple[float, float]]:
             bounds.append((-5.0, 5.0))       # charge
 
         elif parts[0] == "repulsive":
-            bounds.append((0.0, 1e4))         # B >= 0
+            bounds.append((0.5, 4.0))         # B in Å for (B/r)^12
 
         elif parts[0] == "buckingham":
             if parts[-1] == "A":

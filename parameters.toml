@@ -12,6 +12,7 @@ Pb =  1.4
 Ti =  1.0
 O  = -0.8
 
+# E_r = Σ (B_ij / r_ij)^12, B in Å
 [repulsive]
 O-O  = 1.83
 O-Pb = 2.17
