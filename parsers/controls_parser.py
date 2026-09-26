@@ -35,6 +35,11 @@ class FittingControls:
     patience:    int   = 0     # stop after N evaluations w/o improvement (0 disables)
     maxiter:     int   = 1000  # hard cap on dual_annealing outer iterations
     fixed:       list[str] = field(default_factory=lambda: ["BV.species.*.V0"])  # glob patterns of held parameters
+    optimizer:   str   = "lsq"      # "lsq" (multi-start least squares) | "sa" (dual_annealing)
+    n_starts:    int   = 8          # lsq: number of starts
+    start_spread: float = 0.3       # lsq: relative spread of random starts
+    max_nfev:    int   = 2000       # lsq: max residual evaluations per start
+    jac:         str   = "2-point"  # lsq: "2-point" | "3-point"
 
 
 @dataclass
@@ -142,6 +147,11 @@ def _parse_fitting(data: dict) -> FittingControls:
         polish      = bool (f.get("polish",      d["polish"])),
         target_loss = float(f.get("target_loss", d["target_loss"])),
         fixed       = [str(p) for p in f.get("fixed", d["fixed"])],
+        optimizer   = str  (f.get("optimizer",    d["optimizer"])),
+        n_starts    = int  (f.get("n_starts",     d["n_starts"])),
+        start_spread = float(f.get("start_spread", d["start_spread"])),
+        max_nfev    = int  (f.get("max_nfev",     d["max_nfev"])),
+        jac         = str  (f.get("jac",          d["jac"])),
         patience    = int  (f.get("patience",    d["patience"])),
         maxiter     = int  (f.get("maxiter",     d["maxiter"])),
     )
@@ -198,6 +208,16 @@ def _validate(controls: Controls) -> None:
         raise ValueError(f"fitting.patience must be >= 0, got {controls.fitting.patience}.")
     if controls.fitting.maxiter <= 0:
         raise ValueError(f"fitting.maxiter must be > 0, got {controls.fitting.maxiter}.")
+    if controls.fitting.optimizer not in ("lsq", "sa"):
+        raise ValueError(f"fitting.optimizer must be 'lsq' or 'sa', got '{controls.fitting.optimizer}'.")
+    if controls.fitting.n_starts < 1:
+        raise ValueError(f"fitting.n_starts must be >= 1, got {controls.fitting.n_starts}.")
+    if not (0.0 <= controls.fitting.start_spread < 1.0):
+        raise ValueError(f"fitting.start_spread must be in [0, 1), got {controls.fitting.start_spread}.")
+    if controls.fitting.max_nfev < 1:
+        raise ValueError(f"fitting.max_nfev must be >= 1, got {controls.fitting.max_nfev}.")
+    if controls.fitting.jac not in ("2-point", "3-point"):
+        raise ValueError(f"fitting.jac must be '2-point' or '3-point', got '{controls.fitting.jac}'.")
 
 
 def parse_controls(filepath: str = "controls.toml", validate: bool = True) -> Controls:

@@ -6,7 +6,7 @@ import time
 from typing import Callable
 
 import numpy as np
-from scipy.optimize import dual_annealing, minimize
+from scipy.optimize import dual_annealing, minimize, least_squares
 
 from parsers.parameters_parser import (
     Parameters, CoulombParams, RepulsiveParams,
@@ -313,10 +313,14 @@ def compute_loss(
     use_stress:     bool = False,
     progress:       bool = False,
     progress_label: str = "loss-eval",
+    scales:         dict[str, float] | None = None,
 ) -> float:
     """
     Compute weighted RMSE loss:
-        Loss = w_E * RMSE_E + w_F * RMSE_F (+ w_S * RMSE_S if stress enabled)
+        Loss = w_E * RMSE_E/σ_E + w_F * RMSE_F/σ_F (+ w_S * RMSE_S/σ_S if stress enabled)
+
+    ``scales`` = {"E": σ_E, "F": σ_F, "S": σ_S} makes each term dimensionless
+    (see ``data_scales``); None means σ = 1 (raw RMSEs in eV/atom, eV/Å, eV/Å³).
 
     RMSE_E is per atom, after removing the least-squares per-species
     reference energy (see ``_solve_energy_reference``): only energy
@@ -365,16 +369,169 @@ def compute_loss(
     _, e_res = _solve_energy_reference(
         np.asarray(e_ref) - np.asarray(e_model), N, N.sum(axis=1),
     )
+    sc     = scales or {"E": 1.0, "F": 1.0, "S": 1.0}
     rmse_E = np.sqrt(np.mean(e_res ** 2))
     rmse_F = np.sqrt(np.mean(f_errors))
 
-    loss = w_E * rmse_E + w_F * rmse_F
+    loss = w_E * rmse_E / sc["E"] + w_F * rmse_F / sc["F"]
 
     if has_stress and s_errors:
         rmse_S = np.sqrt(np.mean(s_errors))
-        loss  += w_S * rmse_S
+        loss  += w_S * rmse_S / sc["S"]
 
     return float(loss)
+
+
+# ──────────────────────────────────────────────
+# Data scales and residual vector (least squares)
+# ──────────────────────────────────────────────
+
+def data_scales(frames: list[Frame], include_stress: bool = False) -> dict[str, float]:
+    """
+    RMS magnitude of each reference quantity, used to make loss terms
+    dimensionless:
+        σ_E = RMS of per-atom DFT energies after removing the least-squares
+              per-species reference (i.e. the spread the model must explain),
+        σ_F = RMS of DFT force components,
+        σ_S = RMS of DFT stress components (eV/Å³), if used.
+    A zero scale (e.g. a single frame) falls back to 1.
+    """
+    species = sorted({s for fr in frames for s in fr.species})
+    N = _composition_matrix(frames, species)
+    _, e_res = _solve_energy_reference(np.array([fr.energy for fr in frames]), N, N.sum(axis=1))
+    sE = float(np.sqrt(np.mean(e_res ** 2)))
+    sF = float(np.sqrt(np.mean(np.concatenate([fr.forces.ravel() for fr in frames]) ** 2)))
+    sS = 1.0
+    if include_stress:
+        st = [(-np.asarray(fr.stress) / EV_PER_ANG3_TO_KBAR).ravel() for fr in frames if fr.stress is not None]
+        if st:
+            sS = float(np.sqrt(np.mean(np.concatenate(st) ** 2)))
+    fix = lambda v: v if v > 0 else 1.0
+    return {"E": fix(sE), "F": fix(sF), "S": fix(sS)}
+
+
+_NONFINITE_RESIDUAL = 1e6
+
+
+def residual_vector(
+    bvff:           BVFF,
+    frames:         list[Frame],
+    w_E:            float,
+    w_F:            float,
+    w_S:            float,
+    scales:         dict[str, float],
+    include_stress: bool = False,
+) -> np.ndarray:
+    """
+    Residual vector r with
+        ||r||² = w_E·MSE_E/σ_E² + w_F·MSE_F/σ_F² (+ w_S·MSE_S/σ_S²),
+    i.e. r_E = √(w_E/N_E)·e/σ_E (e: per-atom energy residual after profiling
+    out the per-species reference — variable projection), r_F =
+    √(w_F/N_F)·ΔF/σ_F, r_S likewise. Non-finite entries (parameter blow-up,
+    e.g. (B/r)^12 at extreme B) are replaced by a large constant so the
+    trust-region step is rejected rather than the run aborted.
+    """
+    e_model, e_ref, f_res, s_res = [], [], [], []
+    for fr in frames:
+        e, f = bvff.energy_and_forces(fr.lattice, fr.species, fr.positions)
+        e_model.append(e); e_ref.append(fr.energy)
+        f_res.append((f - fr.forces).ravel())
+        if include_stress and fr.stress is not None:
+            s = bvff.stress(fr.lattice, fr.species, fr.positions)
+            s_res.append((s + np.asarray(fr.stress) / EV_PER_ANG3_TO_KBAR).ravel())
+    species = sorted({s for fr in frames for s in fr.species})
+    N = _composition_matrix(frames, species)
+    _, e_res = _solve_energy_reference(np.asarray(e_ref) - np.asarray(e_model), N, N.sum(axis=1))
+    f_res = np.concatenate(f_res)
+    parts = [np.sqrt(w_E / e_res.size) * e_res / scales["E"],
+             np.sqrt(w_F / f_res.size) * f_res / scales["F"]]
+    if s_res:
+        s_res = np.concatenate(s_res)
+        parts.append(np.sqrt(w_S / s_res.size) * s_res / scales["S"])
+    r = np.concatenate(parts)
+    return np.nan_to_num(r, nan=_NONFINITE_RESIDUAL, posinf=_NONFINITE_RESIDUAL,
+                         neginf=-_NONFINITE_RESIDUAL)
+
+
+def _fd_jacobian(fun: Callable[[np.ndarray], np.ndarray], x: np.ndarray,
+                 lo: np.ndarray, hi: np.ndarray, r0: np.ndarray | None = None) -> np.ndarray:
+    """Forward-difference Jacobian (steps pointed inward at active bounds)."""
+    r0 = fun(x) if r0 is None else r0
+    J  = np.empty((r0.size, x.size))
+    for k in range(x.size):
+        h = 1.5e-8 * max(1.0, abs(x[k]))
+        if x[k] + h > hi[k]:
+            h = -h
+        xk = x.copy(); xk[k] += h
+        J[:, k] = (fun(xk) - r0) / h
+    return J
+
+
+def log_fit_diagnostics(
+    J: np.ndarray, r: np.ndarray, keys: list[str], x: np.ndarray,
+    lo: np.ndarray | None = None, hi: np.ndarray | None = None,
+    rcond: float = 1e-8, max_corr_lines: int = 10,
+) -> dict:
+    """
+    Identifiability / uncertainty diagnostics from the residual Jacobian at the
+    solution.
+
+    - Singular spectrum and condition number of J.
+    - Near-null directions (σ_k < rcond·σ_max): parameter combinations the data
+      do not constrain; their dominant components are listed. They are removed
+      before forming the covariance, otherwise 1/σ_k² swamps everything and
+      every correlation reads ±1.
+    - Approximate standard errors σ_θ = √diag(s² V Σ⁻² Vᵀ) over the retained
+      subspace, with s² = ||r||²/(M−P).
+    - Parameters sitting on a bound (their error bars are not meaningful: the
+      constraint, not the data, fixes them).
+    - The strongest correlations |ρ| > 0.95 (at most ``max_corr_lines``).
+    """
+    M, P = J.shape
+    _, sv, Vt = np.linalg.svd(J, full_matrices=False)
+    cond = sv[0] / sv[-1] if sv[-1] > 0 else np.inf
+    keep = sv > rcond * sv[0]
+    logger.info(f"Diagnostics: singular values max {sv[0]:.3e}, min {sv[-1]:.3e}, cond {cond:.3e}")
+
+    null_dirs = []
+    for k in np.flatnonzero(~keep):
+        comp = sorted(zip(keys, Vt[k]), key=lambda t: -abs(t[1]))[:3]
+        null_dirs.append((sv[k], comp))
+        logger.info(
+            f"  unconstrained direction (σ={sv[k]:.1e}): "
+            + ", ".join(f"{n} {w:+.2f}" for n, w in comp)
+        )
+
+    s2   = float(r @ r) / max(M - P, 1)
+    Vk   = Vt[keep].T
+    cov  = s2 * (Vk / sv[keep] ** 2) @ Vk.T
+    se   = np.sqrt(np.maximum(np.diag(cov), 0.0))
+
+    at_bound = np.zeros(P, dtype=bool)
+    if lo is not None and hi is not None:
+        tol = 1e-6 * np.maximum(hi - lo, 1e-12)
+        at_bound = (x - lo <= tol) | (hi - x <= tol)
+    for k_, v, e, b in zip(keys, x, se, at_bound):
+        logger.info(f"  {k_:28s} = {v:+.6f} ± {e:.2e}" + ("   [at bound]" if b else ""))
+
+    # Parameters lying (almost) entirely in the removed null space have ~zero
+    # retained variance; their correlations are numerical noise.
+    degenerate = se <= 1e-8 * (np.abs(x) + 1e-8)
+    d    = np.where(se > 0, se, 1.0)
+    corr = cov / np.outer(d, d)
+    pairs = sorted(
+        ((keys[a], keys[b], corr[a, b]) for a in range(P) for b in range(a + 1, P)
+         if abs(corr[a, b]) > 0.95 and not (at_bound[a] or at_bound[b])
+         and not (degenerate[a] or degenerate[b])),
+        key=lambda t: -abs(t[2]),
+    )
+    for a, b, c in pairs[:max_corr_lines]:
+        logger.info(f"  high correlation: {a} ~ {b}  ρ = {c:+.3f}")
+    if len(pairs) > max_corr_lines:
+        logger.info(f"  … {len(pairs) - max_corr_lines} more pairs with |ρ| > 0.95")
+    return {"singular_values": sv, "cond": cond, "stderr": dict(zip(keys, se)),
+            "null_directions": null_dirs, "at_bound": [k for k, b in zip(keys, at_bound) if b],
+            "correlated": pairs}
 
 
 # ──────────────────────────────────────────────
@@ -451,15 +608,26 @@ def fit(
     patience:          int   = 0,
     seed:              int   = 42,
     fixed:             list[str] | tuple[str, ...] = ("BV.species.*.V0",),
+    optimizer:         str   = "lsq",
+    n_starts:          int   = 8,
+    start_spread:      float = 0.3,
+    max_nfev:          int   = 2000,
+    jac:               str   = "2-point",
 ) -> tuple[Parameters, float]:
     """
-    Fit BVFF parameters with Simulated Annealing (scipy ``dual_annealing``),
-    optionally followed by an L-BFGS-B local polish.
+    Fit BVFF parameters.
 
-    The global stage explores the bounded parameter space and is robust to the
-    rugged, multi-modal BVFF loss surface. The optional polish stage then runs
-    a gradient-based (numerical-gradient) L-BFGS-B refinement from the global
-    best; the better of the two results is kept, so polish can only help.
+    optimizer = "lsq" (default): multi-start bounded nonlinear least squares
+    (scipy ``least_squares``, trust-region reflective) on the σ-normalised
+    residual vector (see ``residual_vector``). Start 1 is the input
+    parameters; starts 2..n multiply each free parameter by U(1-s, 1+s),
+    clipped to bounds. The lowest-cost solution is kept.
+
+    optimizer = "sa": Simulated Annealing (``dual_annealing``) on the scalar
+    σ-normalised loss, optionally followed by an L-BFGS-B polish.
+
+    Both optimizers use the same σ-normalised loss, so ``best_loss`` is
+    comparable: Σ_k w_k RMSE_k/σ_k with σ from ``data_scales``.
 
     Args:
         bvff_builder:       function that builds BVFF from Parameters
@@ -476,6 +644,11 @@ def fit(
         seed:               random seed for reproducibility
         fixed:              glob patterns of parameter keys held at their input
                             values (default: BV V0 — see controls.toml)
+        optimizer:          "lsq" | "sa"
+        n_starts:           lsq: number of starts
+        start_spread:       lsq: relative spread s of random starts
+        max_nfev:           lsq: max residual evaluations per start (excl. Jacobian)
+        jac:                lsq: finite-difference scheme "2-point" | "3-point"
 
     Returns:
         fitted_params: optimized Parameters dataclass
@@ -508,9 +681,32 @@ def fit(
         logger.info(f"Held fixed ({len(held)}): " + ", ".join(held))
     x0, keys = x_all[mask], [k for k, m in zip(keys_all, mask) if m]
     bounds   = build_bounds(keys)
+    lo, hi   = np.array(bounds, dtype=float).T
 
-    logger.info(f"Fitting {len(keys)} parameters with Simulated Annealing ...")
+    if optimizer not in ("lsq", "sa"):
+        raise ValueError(f"optimizer must be 'lsq' or 'sa', got '{optimizer}'.")
+    include_stress = bool(use_stress and has_stress)
+    scales = data_scales(train_frames, include_stress)
+    logger.info(
+        f"Fitting {len(keys)} parameters with "
+        + ("multi-start least squares" if optimizer == "lsq" else "Simulated Annealing") + " ..."
+    )
     logger.info(f"Loss weights: w_E={w_E}, w_F={w_F}, w_S={w_S}")
+    logger.info(
+        f"Data scales: σ_E={scales['E']*1e3:.3f} meV/atom, σ_F={scales['F']:.4f} eV/Å"
+        + (f", σ_S={scales['S']:.3e} eV/Å³" if include_stress else "")
+        + "  (loss = Σ w·RMSE/σ)"
+    )
+
+    def build_x(x: np.ndarray) -> BVFF:
+        return bvff_builder(vector_to_params(x, keys, params, composition))
+
+    def resid(x: np.ndarray) -> np.ndarray:
+        return residual_vector(build_x(x), train_frames, w_E, w_F, w_S, scales, include_stress)
+
+    def scalar_loss(x: np.ndarray) -> float:
+        return compute_loss(build_x(x), train_frames, w_E, w_F, w_S, has_stress,
+                            use_stress=use_stress, scales=scales)
 
     # Show the starting-point loss before optimization begins so the user
     # can see "fitting is alive" immediately. The progress bar streams per-frame
@@ -519,7 +715,7 @@ def fit(
     t_fit_start = time.time()
     initial_loss = compute_loss(
         bvff_builder(params), train_frames, w_E, w_F, w_S, has_stress,
-        use_stress=use_stress, progress=True, progress_label="initial-loss",
+        use_stress=use_stress, progress=True, progress_label="initial-loss", scales=scales,
     )
     logger.info(f"  Initial loss = {initial_loss:.6f} (1 evaluation took {time.time() - t_fit_start:.2f}s)")
     eval_s = time.time() - t_fit_start
@@ -529,113 +725,156 @@ def fit(
             f"Consider raising frame_start / lowering train_ratio / using stride to subsample frames."
         )
 
-    if target_loss > 0:
-        logger.info(f"  Early stop: target_loss = {target_loss:.6f}")
-    if patience > 0:
-        logger.info(f"  Early stop: patience    = {patience} evaluations without improvement")
+    if optimizer == "sa":
+        if target_loss > 0:
+            logger.info(f"  Early stop: target_loss = {target_loss:.6f}")
+        if patience > 0:
+            logger.info(f"  Early stop: patience    = {patience} evaluations without improvement")
 
-    state = {
-        "iter":          0,
-        "best":          float(initial_loss),
-        "since_improve": 0,
-        "t0":            time.time(),
-        "stop_reason":   None,
-    }
+        state = {
+            "iter":          0,
+            "best":          float(initial_loss),
+            "since_improve": 0,
+            "t0":            time.time(),
+            "stop_reason":   None,
+        }
 
-    def objective(x: np.ndarray) -> float:
-        # Label each per-iter progress bar with the upcoming iter number so the
-        # user can see which evaluation is in flight.
-        next_iter = state["iter"] + 1
-        current_params = vector_to_params(x, keys, params, composition)
-        bvff           = bvff_builder(current_params)
-        # progress=False inside the SA inner loop — per-frame progress was
-        # flooding the log and slightly slowing things via per-iter I/O.
-        loss           = compute_loss(
-            bvff, train_frames, w_E, w_F, w_S, has_stress,
-            use_stress=use_stress, progress=False,
+        def objective(x: np.ndarray) -> float:
+            # Label each per-iter progress bar with the upcoming iter number so the
+            # user can see which evaluation is in flight.
+            next_iter = state["iter"] + 1
+            current_params = vector_to_params(x, keys, params, composition)
+            bvff           = bvff_builder(current_params)
+            # progress=False inside the SA inner loop — per-frame progress was
+            # flooding the log and slightly slowing things via per-iter I/O.
+            loss           = compute_loss(
+                bvff, train_frames, w_E, w_F, w_S, has_stress,
+                use_stress=use_stress, progress=False, scales=scales,
+            )
+
+            state["iter"] = next_iter
+            prev_best          = state["best"]
+            if loss < prev_best:
+                state["best"] = loss
+            # Patience only cares about meaningful improvements — see _PATIENCE_REL_TOL.
+            improved = loss < prev_best * (1.0 - _PATIENCE_REL_TOL)
+            if improved:
+                state["since_improve"] = 0
+            else:
+                state["since_improve"] += 1
+
+            # Decide whether early-stop conditions are met. dual_annealing only
+            # acts on this via the callback, but recording it here means the next
+            # callback invocation will short-circuit the run.
+            if state["stop_reason"] is None:
+                if target_loss > 0 and state["best"] <= target_loss:
+                    state["stop_reason"] = f"target_loss {target_loss:.6f} reached (best={state['best']:.6f})"
+                elif patience > 0 and state["since_improve"] >= patience:
+                    state["stop_reason"] = f"no improvement for {patience} evaluations"
+
+            # Throttle non-improvement lines so the log is readable. Always show
+            # patience-resetting improvements and stop events.
+            should_log = (
+                improved
+                or state["stop_reason"] is not None
+                or next_iter % _LOG_EVERY == 0
+            )
+            if should_log:
+                elapsed = time.time() - state["t0"]
+                mark = "*" if improved else " "
+                logger.info(
+                    f" {mark}iter {next_iter:5d} | loss={loss:.6f} | best={state['best']:.6f} "
+                    f"| no-improve {state['since_improve']:4d} | elapsed {elapsed:6.1f}s"
+                )
+
+            return loss
+
+        def early_stop_cb(x, f, context):
+            # Returning True asks dual_annealing to terminate. We rely on the flag
+            # set inside objective() so the trigger semantics are evaluation-based.
+            return state["stop_reason"] is not None
+
+        result = dual_annealing(
+            objective,
+            bounds   = bounds,
+            x0       = x0,
+            maxiter  = maxiter,
+            seed     = seed,
+            callback = early_stop_cb,
         )
 
-        state["iter"] = next_iter
-        prev_best          = state["best"]
-        if loss < prev_best:
-            state["best"] = loss
-        # Patience only cares about meaningful improvements — see _PATIENCE_REL_TOL.
-        improved = loss < prev_best * (1.0 - _PATIENCE_REL_TOL)
-        if improved:
-            state["since_improve"] = 0
+        best_x    = result.x
+        best_loss = float(result.fun)
+
+        if state["stop_reason"]:
+            logger.info(f"Early-stopped: {state['stop_reason']}")
+        logger.info(
+            f"Global stage done in {time.time() - t_fit_start:.1f}s "
+            f"| {state['iter']} evaluations | best loss = {best_loss:.6f}"
+        )
+
+        # Optional local polish: gradient-based (numerical-gradient) L-BFGS-B from
+        # the global best, within the same bounds. Keep it only if it improves.
+        if polish:
+            logger.info("Polishing best point with L-BFGS-B ...")
+            t_polish = time.time()
+            polish_res = minimize(
+                objective, best_x, method="L-BFGS-B", bounds=bounds,
+            )
+            polish_loss = float(polish_res.fun)
+            if polish_loss < best_loss:
+                logger.info(
+                    f"  Polish improved loss {best_loss:.6f} → {polish_loss:.6f} "
+                    f"({time.time() - t_polish:.1f}s)"
+                )
+                best_x, best_loss = polish_res.x, polish_loss
+            else:
+                logger.info(
+                    f"  Polish did not improve (kept {best_loss:.6f}, "
+                    f"{time.time() - t_polish:.1f}s)"
+                )
+
+    else:
+        rng    = np.random.default_rng(seed)
+        starts = [x0.copy()] + [
+            np.clip(x0 * rng.uniform(1.0 - start_spread, 1.0 + start_spread, size=x0.size), lo, hi)
+            for _ in range(max(n_starts, 1) - 1)
+        ]
+        logger.info(
+            f"  {len(starts)} starts (spread ±{start_spread:.0%}), max_nfev={max_nfev}, jac={jac}"
+        )
+        results = []
+        for k, xs in enumerate(starts, 1):
+            t_s = time.time()
+            res = least_squares(
+                resid, xs, bounds=(lo, hi), method="trf", x_scale="jac", jac=jac,
+                ftol=1e-10, xtol=1e-10, gtol=1e-10, max_nfev=max_nfev,
+            )
+            L = scalar_loss(res.x)
+            results.append((res.cost, L, res))
+            logger.info(
+                f"  start {k:2d}/{len(starts)}: loss={L:.6f} (½‖r‖²={res.cost:.4e}) "
+                f"nfev={res.nfev} njev={res.njev} status={res.status} | {time.time() - t_s:.1f}s"
+            )
+        results.sort(key=lambda t: t[0])
+        best_cost, best_loss, best_res = results[0]
+        best_x = best_res.x
+        near = [t for t in results if t[0] <= best_cost * (1 + 1e-6) + 1e-14]
+        if len(near) > 1:
+            spread = np.max(np.abs(np.array([t[2].x for t in near]) - best_x), axis=0)
+            logger.info(
+                f"  {len(near)}/{len(results)} starts reached the best cost; "
+                f"max parameter spread among them = {spread.max():.2e}"
+            )
         else:
-            state["since_improve"] += 1
-
-        # Decide whether early-stop conditions are met. dual_annealing only
-        # acts on this via the callback, but recording it here means the next
-        # callback invocation will short-circuit the run.
-        if state["stop_reason"] is None:
-            if target_loss > 0 and state["best"] <= target_loss:
-                state["stop_reason"] = f"target_loss {target_loss:.6f} reached (best={state['best']:.6f})"
-            elif patience > 0 and state["since_improve"] >= patience:
-                state["stop_reason"] = f"no improvement for {patience} evaluations"
-
-        # Throttle non-improvement lines so the log is readable. Always show
-        # patience-resetting improvements and stop events.
-        should_log = (
-            improved
-            or state["stop_reason"] is not None
-            or next_iter % _LOG_EVERY == 0
+            logger.info(f"  best cost reached by 1/{len(results)} starts")
+        logger.info(
+            f"Fitting stage done in {time.time() - t_fit_start:.1f}s | best loss = {best_loss:.6f}"
         )
-        if should_log:
-            elapsed = time.time() - state["t0"]
-            mark = "*" if improved else " "
-            logger.info(
-                f" {mark}iter {next_iter:5d} | loss={loss:.6f} | best={state['best']:.6f} "
-                f"| no-improve {state['since_improve']:4d} | elapsed {elapsed:6.1f}s"
-            )
 
-        return loss
-
-    def early_stop_cb(x, f, context):
-        # Returning True asks dual_annealing to terminate. We rely on the flag
-        # set inside objective() so the trigger semantics are evaluation-based.
-        return state["stop_reason"] is not None
-
-    result = dual_annealing(
-        objective,
-        bounds   = bounds,
-        x0       = x0,
-        maxiter  = maxiter,
-        seed     = seed,
-        callback = early_stop_cb,
-    )
-
-    best_x    = result.x
-    best_loss = float(result.fun)
-
-    if state["stop_reason"]:
-        logger.info(f"Early-stopped: {state['stop_reason']}")
-    logger.info(
-        f"Global stage done in {time.time() - t_fit_start:.1f}s "
-        f"| {state['iter']} evaluations | best loss = {best_loss:.6f}"
-    )
-
-    # Optional local polish: gradient-based (numerical-gradient) L-BFGS-B from
-    # the global best, within the same bounds. Keep it only if it improves.
-    if polish:
-        logger.info("Polishing best point with L-BFGS-B ...")
-        t_polish = time.time()
-        polish_res = minimize(
-            objective, best_x, method="L-BFGS-B", bounds=bounds,
-        )
-        polish_loss = float(polish_res.fun)
-        if polish_loss < best_loss:
-            logger.info(
-                f"  Polish improved loss {best_loss:.6f} → {polish_loss:.6f} "
-                f"({time.time() - t_polish:.1f}s)"
-            )
-            best_x, best_loss = polish_res.x, polish_loss
-        else:
-            logger.info(
-                f"  Polish did not improve (kept {best_loss:.6f}, "
-                f"{time.time() - t_polish:.1f}s)"
-            )
+    # Identifiability / uncertainty at the solution (P+1 residual evaluations).
+    r_best = resid(best_x)
+    log_fit_diagnostics(_fd_jacobian(resid, best_x, lo, hi, r_best), r_best, keys, best_x, lo, hi)
 
     fitted_params = vector_to_params(best_x, keys, params, composition)
 

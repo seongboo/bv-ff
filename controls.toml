@@ -66,9 +66,22 @@ ewald_cutoff   = 8.0
 ewald_accuracy = 1e-6
 
 [fitting]
+# Loss = Σ_k w_k · RMSE_k / σ_k  (k = E, F, S). σ_k is the RMS of the DFT
+# reference in the training set (energies after removing the per-species
+# reference), so each term is dimensionless and w_k are relative weights.
 w_E         = 1.0
 w_F         = 1.0
 w_S         = 1.0
+
+# Optimizer. "lsq": multi-start bounded least squares (trust-region) on the
+# σ-normalised residual vector — converges in tens of evaluations per start.
+# "sa": dual_annealing on the same scalar loss (+ polish); uses maxiter,
+# patience, target_loss, polish below.
+optimizer    = "lsq"
+n_starts     = 8        # lsq: start 1 = parameters.toml, others ×U(1±spread)
+start_spread = 0.3
+max_nfev     = 2000     # lsq: per start
+jac          = "2-point"
 # use_stress: include the virial stress term in the loss. Needs stress in the
 # dataset (this PbTiO3 NVT run has none) and adds up to ~18 energy evals/frame
 # for terms without a closed-form virial (Ewald, BV, BVV, Angle) → off by default.

@@ -212,7 +212,7 @@ def main():
         logger.info("Stress data not available: stress term excluded from loss.")
 
     # 7. Fitting
-    section(logger, "Step 3/6: Parameter fitting (Simulated Annealing)")
+    section(logger, f"Step 3/6: Parameter fitting ({controls.fitting.optimizer})")
     t0 = time.time()
     fitted_params, best_loss = fit(
         bvff_builder        = lambda p: build_bvff(controls, p),
@@ -229,6 +229,11 @@ def main():
         target_loss         = controls.fitting.target_loss,
         patience            = controls.fitting.patience,
         fixed               = controls.fitting.fixed,
+        optimizer           = controls.fitting.optimizer,
+        n_starts            = controls.fitting.n_starts,
+        start_spread        = controls.fitting.start_spread,
+        max_nfev            = controls.fitting.max_nfev,
+        jac                 = controls.fitting.jac,
     )
     logger.info(f"Best loss: {best_loss:.6f} | fitting took {time.time() - t0:.1f}s")
 

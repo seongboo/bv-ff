@@ -65,6 +65,14 @@ DEFAULT_CONTROLS = {
         # shift of V0), so the parameters are not identifiable. V0 = formal
         # oxidation state, as in the BVMD literature.
         "fixed":       ["BV.species.*.V0"],
+        # Optimizer: "lsq" = multi-start bounded least squares on the
+        # σ-normalised residual vector (default); "sa" = dual_annealing on the
+        # same σ-normalised scalar loss (+ optional polish). lsq-only knobs:
+        "optimizer":    "lsq",
+        "n_starts":     8,
+        "start_spread": 0.3,
+        "max_nfev":     2000,
+        "jac":          "2-point",
     },
 }
 
