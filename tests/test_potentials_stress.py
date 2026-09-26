@@ -65,6 +65,17 @@ def _shift(positions, lattice, delta_cart):
     return positions + delta_cart @ np.linalg.inv(lattice)
 
 
+# Analytic-vs-FD virial checks use a cutoff that sits in a gap of the pair-
+# distance distribution of this frame (no pair within 5.8945–5.9097 Å). At
+# CUTOFF = 6.0 an image pair lies at r = 6.0000125 Å; the FD strain
+# (ε = 1e-4 → δr ≈ 6e-4 Å) moves it across the hard cutoff, so the truncated
+# energy jumps and the FD derivative is meaningless. That discontinuity is a
+# real property of hard-truncated pair terms (to be removed by a smooth
+# cutoff); it is not a virial bug — with the gap cutoff analytic and FD
+# agree to ~1e-11.
+STRESS_CUTOFF = 5.90
+
+
 _BV_SP = {"Pb": {"V0": 2.0, "S": 0.5}, "Ti": {"V0": 4.0, "S": 0.5}, "O": {"V0": 2.0, "S": 0.5}}
 _BV_PP = {"O-Pb": {"r0": 2.06, "C": 6.0}, "O-Ti": {"r0": 1.81, "C": 5.2}}
 _BVV_SP = {"Pb": {"W0": 0.5, "D": 0.1}, "Ti": {"W0": 0.3, "D": 0.1}, "O": {"W0": 0.0, "D": 0.0}}
@@ -75,7 +86,7 @@ _BVV_SP = {"Pb": {"W0": 0.5, "D": 0.1}, "Ti": {"W0": 0.3, "D": 0.1}, "O": {"W0":
 # ──────────────────────────────────────────────
 
 def test_stress_coulomb_analytic_vs_fd(frame):
-    coul = Coulomb(charges={"Pb": 1.4, "Ti": 1.0, "O": -0.8}, cutoff=CUTOFF)
+    coul = Coulomb(charges={"Pb": 1.4, "Ti": 1.0, "O": -0.8}, cutoff=STRESS_CUTOFF)
     analytic = coul.stress(frame.lattice, frame.species, frame.positions)
     fd       = _fd_stress(coul, frame.lattice, frame.species, frame.positions)
     assert np.allclose(analytic, fd, atol=1e-7)
@@ -83,7 +94,7 @@ def test_stress_coulomb_analytic_vs_fd(frame):
 
 
 def test_stress_repulsive_analytic_vs_fd(frame):
-    rep = Repulsive(B={"O-O": 1.83, "O-Pb": 2.17, "O-Ti": 1.28}, cutoff=CUTOFF)
+    rep = Repulsive(B={"O-O": 1.83, "O-Pb": 2.17, "O-Ti": 1.28}, cutoff=STRESS_CUTOFF)
     analytic = rep.stress(frame.lattice, frame.species, frame.positions)
     fd       = _fd_stress(rep, frame.lattice, frame.species, frame.positions)
     assert np.allclose(analytic, fd, atol=1e-7)

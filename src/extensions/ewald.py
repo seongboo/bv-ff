@@ -83,10 +83,9 @@ class Ewald(Potential):
         i_idx, j_idx, r_vecs = self._neighbors(lattice, positions, self.cutoff)
         if len(i_idx) == 0:
             return 0.0
-        mask  = i_idx < j_idx
-        i, j  = i_idx[mask], j_idx[mask]
-        r     = np.linalg.norm(r_vecs[mask], axis=1)
-        e     = np.sum(q[i] * q[j] * erfc(self.alpha * r) / r)
+        # Full ordered list (all images) → factor ½.
+        r     = np.linalg.norm(r_vecs, axis=1)
+        e     = 0.5 * np.sum(q[i_idx] * q[j_idx] * erfc(self.alpha * r) / r)
         return self.KE * float(e)
 
     def _forces_real(
@@ -101,23 +100,16 @@ class Ewald(Potential):
         f = np.zeros((n, 3))
         if len(i_idx) == 0:
             return f
-        # Iterate each pair once (i<j) so f[i]+=df / f[j]-=df is not doubled
-        # by the symmetric (j,i) entry the neighbor list also emits.
-        mask = i_idx < j_idx
-        if not mask.any():
-            return f
-        i, j = i_idx[mask], j_idx[mask]
-        rv   = r_vecs[mask]
-        r    = np.linalg.norm(rv, axis=1)
+        # Full ordered list: force on i = sum over entries (i, j, n).
+        r    = np.linalg.norm(r_vecs, axis=1)
         ar   = self.alpha * r
-        fac  = q[i] * q[j] * (
+        fac  = q[i_idx] * q[j_idx] * (
             erfc(ar) / r**3
             + 2 * self.alpha / np.sqrt(np.pi) * np.exp(-ar * ar) / r**2
         )
-        # f_i = -dE/dr_i for r_vec = r_j - r_i (matches Coulomb sign convention).
-        df   = -(self.KE * fac)[:, None] * rv         # (M, 3)
-        np.add.at(f, i,  df)
-        np.add.at(f, j, -df)
+        # f_i = -dE/dr_i for r_vec = r_j + n·L - r_i (matches Coulomb sign convention).
+        df   = -(self.KE * fac)[:, None] * r_vecs     # (M, 3)
+        np.add.at(f, i_idx, df)
         return f
 
     # ──────────────────────────────────────────────
@@ -265,22 +257,19 @@ class Ewald(Potential):
         e_real = 0.0
         f_real = np.zeros((n, 3))
         if len(i_idx) > 0:
-            mask = i_idx < j_idx
-            if mask.any():
-                i, j = i_idx[mask], j_idx[mask]
-                rv   = r_vecs[mask]
-                r    = np.linalg.norm(rv, axis=1)
-                ar   = self.alpha * r
-                qiqj = q[i] * q[j]
-                erfc_ar = erfc(ar)
-                e_real  = float(self.KE * np.sum(qiqj * erfc_ar / r))
-                fac     = qiqj * (
-                    erfc_ar / r**3
-                    + 2 * self.alpha / np.sqrt(np.pi) * np.exp(-ar * ar) / r**2
-                )
-                df      = -(self.KE * fac)[:, None] * rv
-                np.add.at(f_real, i,  df)
-                np.add.at(f_real, j, -df)
+            # Full ordered list (all images): ½ on the energy, force on i
+            # accumulated from entries (i, j, n) only.
+            r       = np.linalg.norm(r_vecs, axis=1)
+            ar      = self.alpha * r
+            qiqj    = q[i_idx] * q[j_idx]
+            erfc_ar = erfc(ar)
+            e_real  = float(0.5 * self.KE * np.sum(qiqj * erfc_ar / r))
+            fac     = qiqj * (
+                erfc_ar / r**3
+                + 2 * self.alpha / np.sqrt(np.pi) * np.exp(-ar * ar) / r**2
+            )
+            df      = -(self.KE * fac)[:, None] * r_vecs
+            np.add.at(f_real, i_idx, df)
 
         # Reciprocal-space: share phase / cos / sin / S between energy & forces.
         volume      = np.abs(np.linalg.det(lattice))

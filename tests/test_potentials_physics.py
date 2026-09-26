@@ -94,7 +94,8 @@ def test_buckingham_translation_invariance(frame):
 
 
 def test_buckingham_stress_analytic_vs_fd(frame):
-    buck = Buckingham(params=_BUCK, cutoff=CUTOFF)
+    # Cutoff in a pair-distance gap; see STRESS_CUTOFF in test_potentials_stress.py.
+    buck = Buckingham(params=_BUCK, cutoff=5.90)
     analytic = buck.stress(frame.lattice, frame.species, frame.positions)
     fd       = _fd_stress(buck, frame.lattice, frame.species, frame.positions)
     assert np.allclose(analytic, fd, atol=1e-6)

@@ -132,51 +132,69 @@ class Potential(ABC):
     def _pbc_distances(
         self,
         cart_positions: np.ndarray,  # (N, 3) Cartesian
-        lattice:        np.ndarray,  # (3, 3)
+        lattice:        np.ndarray,  # (3, 3) rows = lattice vectors a_i
         cutoff:         float,
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
-        Compute pairwise distances with periodic boundary conditions.
+        Full periodic neighbor list: every (i, j, n) with |r_j + n·L - r_i| <= cutoff,
+        over *all* lattice images n ∈ Z³, including self-images (i == j, n ≠ 0).
+        Only the true self-pair (i == j, n = 0) is excluded.
 
-        Fully vectorised over the N×N ordered-pair grid: build the (N, N, 3)
-        displacement tensor, apply the minimum-image convention in fractional
-        space (``np.round``), then mask by cutoff. This is mathematically
-        identical to the previous double-`for` loop — same minimum-image
-        wrapping, same cutoff test — but runs the work in a handful of numpy
-        calls instead of N² Python iterations (the dominant cost during a fit).
+        Image range. Let b_i be the reciprocal vectors (a_i · b_j = δ_ij, i.e.
+        the columns of L⁻¹) and d_i = 1/|b_i| the perpendicular width of the
+        cell along b_i. For a fractional separation s = Δs + n with the
+        minimum-image part Δs ∈ [-½, ½]³, the projection r·b̂_i = s_i d_i gives
+        |r| >= |s_i| d_i. Hence |r| <= r_c requires |Δs_i + n_i| <= r_c/d_i,
+        and it suffices to scan
+            |n_i| <= n_i^max = floor(r_c/d_i + ½).
+        This holds for any (triclinic) cell and any r_c, including r_c larger
+        than the cell.
 
-        ``np.nonzero`` returns indices in row-major (i-outer, j-inner) order,
-        matching the original loop's emission order; all downstream consumers
-        are order-independent regardless.
+        Cost is O(N² S) with S = Π(2 n_i^max + 1) shifts, vectorised over an
+        (N, N, S, 3) array. Fine for fitting-sized frames (≲ a few hundred
+        atoms); large-scale MD uses LAMMPS's own neighbor list.
+
+        Returns an *ordered, full* list: both (i, j, n) and (j, i, -n) appear.
+        Pair energies must therefore carry a factor ½; the force on i is
+        Σ over entries with first index i.
 
         Returns:
             i_idx:   (M,) indices of atom i
             j_idx:   (M,) indices of atom j
-            r_vecs:  (M, 3) displacement vectors r_j - r_i in Cartesian (Angstrom)
+            r_vecs:  (M, 3) r_j + n·L - r_i in Cartesian (Angstrom)
         """
         n = len(cart_positions)
-        if n < 2:
+        if n == 0:
             return (
                 np.empty(0, dtype=np.int64),
                 np.empty(0, dtype=np.int64),
                 np.zeros((0, 3)),
             )
 
-        inv_lattice = np.linalg.inv(lattice)
+        lattice     = np.asarray(lattice, dtype=float)
+        inv_lattice = np.linalg.inv(lattice)                # columns = b_i
 
-        # diff_cart[i, j] = r_j - r_i  (N, N, 3)
-        diff_cart = cart_positions[None, :, :] - cart_positions[:, None, :]
-        # Wrap to nearest image in fractional space, then back to Cartesian.
-        diff_frac  = diff_cart @ inv_lattice
-        diff_frac -= np.round(diff_frac)
-        diff_cart  = diff_frac @ lattice
+        # Minimum-image fractional separations Δs_ij ∈ [-½, ½]³   (N, N, 3)
+        frac = cart_positions @ inv_lattice
+        ds   = frac[None, :, :] - frac[:, None, :]
+        ds  -= np.round(ds)
 
-        dist = np.linalg.norm(diff_cart, axis=2)        # (N, N)
-        mask = (dist > 0.0) & (dist <= cutoff)
-        np.fill_diagonal(mask, False)                   # drop i == j
+        # Perpendicular widths d_i = 1/|b_i| and image range n_i^max.
+        widths = 1.0 / np.linalg.norm(inv_lattice, axis=0)  # (3,)
+        n_max  = np.floor(cutoff / widths + 0.5).astype(int)
+        rng    = [np.arange(-m, m + 1) for m in n_max]
+        shifts = np.stack(np.meshgrid(*rng, indexing="ij"), axis=-1).reshape(-1, 3)  # (S, 3)
+        zero   = int(np.flatnonzero(~shifts.any(axis=1))[0])
 
-        i_idx, j_idx = np.nonzero(mask)                 # row-major (i, then j)
-        r_vecs       = diff_cart[i_idx, j_idx]          # (M, 3)
+        # All image separations (N, N, S, 3) in Cartesian.
+        rv   = (ds[:, :, None, :] + shifts[None, None, :, :]) @ lattice
+        dist = np.linalg.norm(rv, axis=-1)                  # (N, N, S)
+        mask = dist <= cutoff
+        idx  = np.arange(n)
+        mask[idx, idx, zero] = False                        # drop the self-pair only
+
+        i_idx, j_idx, s_idx = np.nonzero(mask)              # row-major (i, j, shift)
+        r_vecs = rv[i_idx, j_idx, s_idx]                    # (M, 3)
         return i_idx, j_idx, r_vecs
 
     def _neighbors(
@@ -189,7 +207,7 @@ class Potential(ABC):
         Cached entry point to the neighbor list for a frame.
 
         The result depends only on (positions, lattice, cutoff), so we memoize
-        it on the (id(positions), id(lattice), cutoff) triple. Subsequent calls
+        it on the byte contents of (positions, lattice) plus cutoff. Subsequent calls
         from any Potential term hit the cache instead of rerunning the N×N PBC
         loop in ``_pbc_distances``.
 
@@ -212,8 +230,9 @@ class Potential(ABC):
 
 class Coulomb(Potential):
     """
-    Coulomb energy: E_c = sum_{i<j} q_i * q_j / r_ij
-    Direct summation (use with Ewald for long-range accuracy).
+    Coulomb energy: E_c = ½ Σ_i Σ_(j,n) q_i q_j / r_ij,n   (all images within cutoff)
+    Direct truncated summation (use Ewald for long-range accuracy).
+    NOTE: returns e²/Å, not eV (no k_e factor) — tracked separately.
     """
 
     def __init__(self, charges: dict[str, float], cutoff: float):
@@ -233,10 +252,8 @@ class Coulomb(Potential):
         if len(i_idx) == 0:
             return 0.0
         q     = self._charge_vector(species)
-        mask  = i_idx < j_idx
-        i, j  = i_idx[mask], j_idx[mask]
-        r     = np.linalg.norm(r_vecs[mask], axis=1)
-        return float(np.sum(q[i] * q[j] / r))
+        r     = np.linalg.norm(r_vecs, axis=1)
+        return 0.5 * float(np.sum(q[i_idx] * q[j_idx] / r))
 
     def forces(self, lattice, species, positions) -> np.ndarray:
         n = len(species)
@@ -253,21 +270,18 @@ class Coulomb(Potential):
         return f
 
     def stress(self, lattice, species, positions, eps: float = 1e-4) -> np.ndarray:
-        """Analytic pairwise virial: σ_αβ = (1/V) Σ_{i<j} f_α r_β, where f is
-        the per-pair force on atom i and r the displacement r_j - r_i. Exact
-        closed form of the base-class strain derivative for a central pair
-        potential (validated against the FD path in the tests)."""
+        """Analytic pairwise virial: σ_αβ = (1/2V) Σ_(i,j,n) f_α r_β over the
+        full ordered list (each unordered pair twice), where f is the per-pair
+        force on atom i and r = r_j + n·L - r_i. Exact closed form of the
+        base-class strain derivative for a central pair potential."""
         i_idx, j_idx, r_vecs = self._neighbors(lattice, positions, self.cutoff)
         volume = abs(np.linalg.det(np.asarray(lattice, dtype=float)))
         if len(i_idx) == 0:
             return np.zeros((3, 3))
         q    = self._charge_vector(species)
-        mask = i_idx < j_idx
-        i, j = i_idx[mask], j_idx[mask]
-        rv   = r_vecs[mask]
-        r    = np.linalg.norm(rv, axis=1)
-        df   = -(q[i] * q[j] / r**3)[:, None] * rv      # force on i per pair
-        return np.einsum("ma,mb->ab", df, rv) / volume
+        r    = np.linalg.norm(r_vecs, axis=1)
+        df   = -(q[i_idx] * q[j_idx] / r**3)[:, None] * r_vecs   # force on i per entry
+        return 0.5 * np.einsum("ma,mb->ab", df, r_vecs) / volume
 
 
 # ──────────────────────────────────────────────
@@ -276,7 +290,7 @@ class Coulomb(Potential):
 
 class Repulsive(Potential):
     """
-    Short-range repulsive energy: E_r = sum_{i<j} B_ij / r_ij^12
+    Short-range repulsive energy: E_r = ½ Σ_i Σ_(j,n) B_ij / r_ij,n^12
     """
 
     def __init__(self, B: dict[str, float], cutoff: float):
@@ -310,11 +324,9 @@ class Repulsive(Potential):
         if len(i_idx) == 0:
             return 0.0
         codes, B_table = self._pair_B_table(species)
-        mask = i_idx < j_idx
-        i, j = i_idx[mask], j_idx[mask]
-        r    = np.linalg.norm(r_vecs[mask], axis=1)
-        bij  = B_table[codes[i], codes[j]]
-        return float(np.sum(bij / r**12))
+        r    = np.linalg.norm(r_vecs, axis=1)
+        bij  = B_table[codes[i_idx], codes[j_idx]]
+        return 0.5 * float(np.sum(bij / r**12))
 
     def forces(self, lattice, species, positions) -> np.ndarray:
         n = len(species)
@@ -323,40 +335,29 @@ class Repulsive(Potential):
         if len(i_idx) == 0:
             return f
         codes, B_table = self._pair_B_table(species)
-        # Iterate each pair once (i<j) so f[i]+=df / f[j]-=df is not doubled
-        # by the symmetric (j,i) pair the neighbor list also emits.
-        mask = i_idx < j_idx
-        if not mask.any():
-            return f
-        i, j = i_idx[mask], j_idx[mask]
-        rv   = r_vecs[mask]
-        r    = np.linalg.norm(rv, axis=1)
-        bij  = B_table[codes[i], codes[j]]
-        # f_i = -dE/dr_i. With r_vec = r_j - r_i, dE/dr_i = +12 B r_vec / r^14,
-        # so f_i = -12 B r_vec / r^14 per pair.
-        df   = -(12.0 * bij / r**14)[:, None] * rv
-        np.add.at(f, i,  df)
-        np.add.at(f, j, -df)
+        # Full ordered list: the force on i is the sum over entries (i, j, n).
+        # f_i = -dE/dr_i. With r_vec = r_j + n·L - r_i, dE/dr_i = +12 B r_vec / r^14,
+        # so f_i = -12 B r_vec / r^14 per entry. Self-image entries (i, i, ±n)
+        # cancel pairwise, as they must.
+        r    = np.linalg.norm(r_vecs, axis=1)
+        bij  = B_table[codes[i_idx], codes[j_idx]]
+        df   = -(12.0 * bij / r**14)[:, None] * r_vecs
+        np.add.at(f, i_idx, df)
         return f
 
     def stress(self, lattice, species, positions, eps: float = 1e-4) -> np.ndarray:
-        """Analytic pairwise virial: σ_αβ = (1/V) Σ_{i<j} f_α r_β, with f the
-        per-pair force on atom i and r = r_j - r_i. Closed form of the
-        base-class strain derivative for this central pair potential."""
+        """Analytic pairwise virial: σ_αβ = (1/2V) Σ_(i,j,n) f_α r_β over the
+        full ordered list, with f the per-entry force on atom i and
+        r = r_j + n·L - r_i."""
         i_idx, j_idx, r_vecs = self._neighbors(lattice, positions, self.cutoff)
         volume = abs(np.linalg.det(np.asarray(lattice, dtype=float)))
         if len(i_idx) == 0:
             return np.zeros((3, 3))
         codes, B_table = self._pair_B_table(species)
-        mask = i_idx < j_idx
-        if not mask.any():
-            return np.zeros((3, 3))
-        i, j = i_idx[mask], j_idx[mask]
-        rv   = r_vecs[mask]
-        r    = np.linalg.norm(rv, axis=1)
-        bij  = B_table[codes[i], codes[j]]
-        df   = -(12.0 * bij / r**14)[:, None] * rv      # force on i per pair
-        return np.einsum("ma,mb->ab", df, rv) / volume
+        r    = np.linalg.norm(r_vecs, axis=1)
+        bij  = B_table[codes[i_idx], codes[j_idx]]
+        df   = -(12.0 * bij / r**14)[:, None] * r_vecs  # force on i per entry
+        return 0.5 * np.einsum("ma,mb->ab", df, r_vecs) / volume
 
 
 # ──────────────────────────────────────────────
@@ -365,7 +366,7 @@ class Repulsive(Potential):
 
 class Buckingham(Potential):
     """
-    Buckingham pair potential: E = sum_{i<j} A_ij exp(-r_ij / rho_ij) - C_ij / r_ij^6
+    Buckingham pair potential: E = ½ Σ_i Σ_(j,n) A_ij exp(-r / rho_ij) - C_ij / r^6
 
     The Born-Mayer exponential is the short-range repulsion (softer and more
     physical than the r^-12 of ``Repulsive``); the -C/r^6 term is dispersion
@@ -410,13 +411,11 @@ class Buckingham(Potential):
         if len(i_idx) == 0:
             return 0.0
         codes, A_tbl, rho_tbl, C_tbl = self._pair_tables(species)
-        mask = i_idx < j_idx
-        i, j = i_idx[mask], j_idx[mask]
-        r    = np.linalg.norm(r_vecs[mask], axis=1)
-        A    = A_tbl[codes[i], codes[j]]
-        rho  = rho_tbl[codes[i], codes[j]]
-        C    = C_tbl[codes[i], codes[j]]
-        return float(np.sum(A * np.exp(-r / rho) - C / r**6))
+        r    = np.linalg.norm(r_vecs, axis=1)
+        A    = A_tbl[codes[i_idx], codes[j_idx]]
+        rho  = rho_tbl[codes[i_idx], codes[j_idx]]
+        C    = C_tbl[codes[i_idx], codes[j_idx]]
+        return 0.5 * float(np.sum(A * np.exp(-r / rho) - C / r**6))
 
     def _pair_force_df(self, species, i, j, rv, r):
         """Per-pair force on atom i (central): f_i = phi'(r) r_vec / r."""
@@ -434,31 +433,21 @@ class Buckingham(Potential):
         f = np.zeros((n, 3))
         if len(i_idx) == 0:
             return f
-        mask = i_idx < j_idx
-        if not mask.any():
-            return f
-        i, j = i_idx[mask], j_idx[mask]
-        rv   = r_vecs[mask]
-        r    = np.linalg.norm(rv, axis=1)
-        df   = self._pair_force_df(species, i, j, rv, r)
-        np.add.at(f, i,  df)
-        np.add.at(f, j, -df)
+        # Full ordered list: force on i = sum over entries (i, j, n).
+        r    = np.linalg.norm(r_vecs, axis=1)
+        df   = self._pair_force_df(species, i_idx, j_idx, r_vecs, r)
+        np.add.at(f, i_idx, df)
         return f
 
     def stress(self, lattice, species, positions, eps: float = 1e-4) -> np.ndarray:
-        """Analytic pairwise virial σ_αβ = (1/V) Σ_{i<j} f_α r_β."""
+        """Analytic pairwise virial σ_αβ = (1/2V) Σ_(i,j,n) f_α r_β (full list)."""
         i_idx, j_idx, r_vecs = self._neighbors(lattice, positions, self.cutoff)
         volume = abs(np.linalg.det(np.asarray(lattice, dtype=float)))
         if len(i_idx) == 0:
             return np.zeros((3, 3))
-        mask = i_idx < j_idx
-        if not mask.any():
-            return np.zeros((3, 3))
-        i, j = i_idx[mask], j_idx[mask]
-        rv   = r_vecs[mask]
-        r    = np.linalg.norm(rv, axis=1)
-        df   = self._pair_force_df(species, i, j, rv, r)
-        return np.einsum("ma,mb->ab", df, rv) / volume
+        r    = np.linalg.norm(r_vecs, axis=1)
+        df   = self._pair_force_df(species, i_idx, j_idx, r_vecs, r)
+        return 0.5 * np.einsum("ma,mb->ab", df, r_vecs) / volume
 
 
 # ──────────────────────────────────────────────

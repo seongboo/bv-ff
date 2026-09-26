@@ -9,6 +9,16 @@ pre-refactor Python-loop implementations to ~1e-13.
 
 Parameters are inline (not read from parameters.toml) so that user-side
 parameter changes do not break these tests.
+
+Snapshot update (full periodic-image neighbor list): the neighbor list
+previously used the minimum-image convention, which with CUTOFF = 6.0 Å
+(> half the perpendicular cell widths, 3.84 / 3.84 / 4.75 Å) silently
+dropped ~40 % of the pairs inside the cutoff (1442 → 2400 ordered pairs).
+The Coulomb, Repulsive, BV and BVV snapshots were re-captured with the
+all-images list, which is validated independently against ASE in
+tests/test_neighbor_list.py and by the supercell-invariance tests in
+tests/test_potentials_physical_correctness.py. Angle uses cutoff 3.5 Å
+(< half width), so its snapshot is unchanged.
 """
 from __future__ import annotations
 
@@ -63,8 +73,8 @@ def test_coulomb(frame):
     coul = Coulomb(charges={"Pb": 1.4, "Ti": 1.0, "O": -0.8}, cutoff=CUTOFF)
     e = coul.energy(frame.lattice, frame.species, frame.positions)
     f = coul.forces(frame.lattice, frame.species, frame.positions)
-    assert e == pytest.approx(-1.946740120667447e+01, abs=ATOL)
-    _check_array(f, 1.150095497042994e+00, 3.405811166176100e-01, 1.110223024625157e-16)
+    assert e == pytest.approx(-2.545410147569994e+01, abs=ATOL)
+    _check_array(f, 7.055224680853588e-01, 2.191833234988994e-01, -5.551115123125783e-17)
 
 
 # ──────────────────────────────────────────────
@@ -75,11 +85,11 @@ def test_repulsive(frame):
     rep = Repulsive(B={"O-O": 1.83, "O-Pb": 2.17, "O-Ti": 1.28}, cutoff=CUTOFF)
     e = rep.energy(frame.lattice, frame.species, frame.positions)
     f = rep.forces(frame.lattice, frame.species, frame.positions)
-    assert e == pytest.approx(2.565334149374310e-02, abs=ATOL)
+    assert e == pytest.approx(2.565975639912134e-02, abs=ATOL)
     # Forces fixed in commit "potentials: remove pair double-count in
     # Repulsive/Ewald-real forces"; previous (buggy) values were exactly 2×.
     # Then sign flipped in a follow-up: forces() returns f = -∂E/∂x.
-    _check_array(f, 4.056852900953006e-02, 1.293433430314763e-02, 1.127570259384925e-17)
+    _check_array(f, 4.056860656333700e-02, 1.293436894556030e-02, 1.691355389077387e-17)
 
 
 # ──────────────────────────────────────────────
@@ -95,18 +105,18 @@ _BV_PP = {"O-Pb": {"r0": 2.06, "C": 6.0},
 def test_bv_valence(frame):
     bv = BV(species_params=_BV_SP, pair_params=_BV_PP, cutoff=CUTOFF)
     V  = bv.get_valence(frame.lattice, frame.species, frame.positions)
-    _check_array(V, 1.549428440207510e+01, 3.954452449968960e+00, 9.309712411853404e+01)
+    _check_array(V, 1.589776941167630e+01, 4.056590571616593e+00, 9.550864764772406e+01)
 
 def test_bv_energy_forces(frame):
     bv = BV(species_params=_BV_SP, pair_params=_BV_PP, cutoff=CUTOFF)
     e = bv.energy(frame.lattice, frame.species, frame.positions)
     f = bv.forces(frame.lattice, frame.species, frame.positions)
-    assert e == pytest.approx(3.126730114985194e-01, abs=ATOL)
+    assert e == pytest.approx(1.871272598225598e-01, abs=ATOL)
     # Updated after fixing the missing Newton 3rd-law term in BV.forces
     # (V_j-derivative contribution per pair); previous values were partial.
     # Force sum is now ~0 (machine epsilon) — the previous +1.00 reflected
     # the missing term.
-    _check_array(f, 3.119610999174457e+00, 1.426004133198878e+00, -6.661338147750939e-16)
+    _check_array(f, 2.329191881834614e+00, 1.035814044402791e+00, 8.881784197001252e-16)
 
 
 # ──────────────────────────────────────────────
@@ -120,18 +130,18 @@ _BVV_SP = {"Pb": {"W0": 0.5, "D": 0.1},
 def test_bvv_W(frame):
     bvv = BVV(species_params=_BVV_SP, pair_params=_BV_PP, cutoff=CUTOFF)
     W   = bvv.get_bvv(frame.lattice, frame.species, frame.positions)
-    _check_array(W, 3.607799564662368e+00, 1.082758405331128e+00, 0.0)
+    _check_array(W, 3.594970543350728e+00, 1.087795624782377e+00, 4.996003610813204e-16)
 
 def test_bvv_energy_forces(frame):
     bvv = BVV(species_params=_BVV_SP, pair_params=_BV_PP, cutoff=CUTOFF)
     e   = bvv.energy(frame.lattice, frame.species, frame.positions)
     f   = bvv.forces(frame.lattice, frame.species, frame.positions)
-    assert e == pytest.approx(6.511581531654735e-02, abs=ATOL)
+    assert e == pytest.approx(5.773241689600741e-02, abs=ATOL)
     # Updated after rewriting BVV.forces with the full 3×3 ∂(V r̂)/∂r_a
     # tensor (previously collapsed to a radial-only 3-vector and missing
     # both lateral and Newton 3rd-law components). Force sum is now ~0
     # (machine epsilon) — previously -2.24, reflecting the missing terms.
-    _check_array(f, 9.388661934250701e-01, 3.795678068185563e-01, 3.608224830031759e-16)
+    _check_array(f, 8.671908294960492e-01, 3.570420271997536e-01, 8.326672684688674e-17)
 
 
 # ──────────────────────────────────────────────
