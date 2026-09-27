@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from src.potentials import _LRUBytesCache, _NEIGHBOR_CACHE, Coulomb, clear_neighbor_cache
+from bvff.core.potentials import _LRUBytesCache, _NEIGHBOR_CACHE, Coulomb, clear_neighbor_cache
 
 
 def test_lru_evicts_oldest_beyond_byte_budget():

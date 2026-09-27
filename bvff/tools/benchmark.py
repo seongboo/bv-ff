@@ -3,7 +3,7 @@ MD throughput benchmark: Python BVFF (ASE) vs the LAMMPS export.
 
 Run from a fit directory (controls.toml + output/fitted_parameters.toml):
 
-    python3 scripts/benchmark.py --lmp /path/to/lmp --reps 2 3 4 --steps 50
+    bvff-benchmark --lmp /path/to/lmp --reps 2 3 4 --steps 50
 
 For each supercell size it times an NVE run and reports steps/s and
 atom-steps/s. The LAMMPS side runs the exported eam/fs + coul/long + bvv
@@ -12,13 +12,8 @@ Compare against your NequIP-in-LAMMPS (ML-IAP) logs for the ML baseline.
 """
 from __future__ import annotations
 
-import sys
 import time
 from pathlib import Path
-
-_PROJECT_ROOT = Path(__file__).resolve().parent.parent
-if str(_PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(_PROJECT_ROOT))
 
 import numpy as np
 
@@ -27,7 +22,7 @@ def bench_python(calc, rep: int, steps: int, a_ref: float, A_site: str) -> dict:
     from ase import units
     from ase.md.verlet import VelocityVerlet
     from ase.md.velocitydistribution import MaxwellBoltzmannDistribution
-    from scripts.ferroelectric import ideal_perovskite
+    from .ferroelectric import ideal_perovskite
 
     atoms = ideal_perovskite(a=a_ref, rep=(rep, rep, rep), A=A_site)
     atoms.calc = calc
@@ -46,8 +41,8 @@ def bench_lammps(lmp: str, export_dir: Path, rep: int, steps: int,
                  a_ref: float, A_site: str, fitted, elems) -> dict:
     import subprocess
     from types import SimpleNamespace
-    from scripts.ferroelectric import ideal_perovskite
-    from scripts.export_lammps import write_data
+    from .ferroelectric import ideal_perovskite
+    from .export_lammps import write_data
 
     atoms = ideal_perovskite(a=a_ref, rep=(rep, rep, rep), A=A_site)
     frame = SimpleNamespace(
@@ -95,12 +90,12 @@ def main() -> int:
     ap.add_argument("--export-dir", default="lammps_export")
     args = ap.parse_args()
 
-    from parsers.controls_parser   import parse_controls
-    from parsers.parameters_parser import parse_parameters
-    from parsers.dataset           import load_dataset
-    from src.main                  import build_bvff
-    from src.calculator            import BVFFCalculator
-    from scripts.ferroelectric     import _detect_chemistry
+    from bvff.parsers.controls_parser   import parse_controls
+    from bvff.parsers.parameters_parser import parse_parameters
+    from bvff.parsers.dataset           import load_dataset
+    from bvff.core.main                  import build_bvff
+    from bvff.core.calculator            import BVFFCalculator
+    from .ferroelectric     import _detect_chemistry
 
     controls = parse_controls("controls.toml")
     fitted   = parse_parameters("output/fitted_parameters.toml", validate=True)

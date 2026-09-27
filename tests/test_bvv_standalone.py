@@ -16,11 +16,11 @@ import copy
 import numpy as np
 import pytest
 
-from parsers.parameters_parser import (
+from bvff.parsers.parameters_parser import (
     parse_parameters, generate_parameters, save_parameters,
     Parameters, BVVParams, BVParams, BVPair, BVVSpecies,
 )
-from src.fitting import params_to_vector, build_bounds
+from bvff.core.fitting import params_to_vector, build_bounds
 
 
 SPECIES = ["Pb", "Ti", "O"]

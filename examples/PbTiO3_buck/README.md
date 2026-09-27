@@ -40,7 +40,7 @@ valence targets destroyed). RMSE alone would have picked it.
 Every run directory persists `output/fit_diagnostics.toml` (bound flags) and
 `output/ferroelectric_validation.toml` + `double_well.png` (physics verdict).
 
-Reproduce: `cd lam_1e-1 && python ../../../src/main.py`
+Reproduce: `cd lam_1e-1 && bvff-fit`
 
 ## Update (2026-07-05, Phase 1-2): smoothing-era refit → `smooth_pruned/` adopted
 
@@ -66,7 +66,7 @@ Born-Mayer O-Pb). `lam_1e-1/output` is kept as the pre-smoothing reference.
 
 ## Update 2 (2026-07-05, Phase 4): phantom-bond fix → `smooth_pruned/` refit v2
 
-Cross-validating the LAMMPS export (`scripts/export_lammps.py --validate`)
+Cross-validating the LAMMPS export (`bvff-export-lammps --validate`)
 exposed a real bug: the **exp-form BV/BVV synthesized phantom exp(−r) bonds
 on every unparameterized species pair** (Pb-Pb, Pb-Ti, Ti-Ti, O-O) — the
 r0=0/b=1 placeholder does not vanish like the power form's (0/r)^C. Fixed

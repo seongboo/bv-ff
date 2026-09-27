@@ -1,5 +1,5 @@
 """
-Ferroelectric tooling (scripts/ferroelectric.py): reference structure,
+Ferroelectric tooling (bvff/tools/ferroelectric.py): reference structure,
 double-well scan, point-charge polarization, relaxation, and a short NVT MD.
 
 These check the *machinery* (shapes, invariants, that ASE drivers run), not the
@@ -10,10 +10,10 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from parsers.dataset   import Frame
-from src.potentials    import Coulomb, Repulsive, BV, BVV, BVFF
-from src.calculator    import BVFFCalculator
-from scripts.ferroelectric import (
+from bvff.parsers.dataset   import Frame
+from bvff.core.potentials    import Coulomb, Repulsive, BV, BVV, BVFF
+from bvff.core.calculator    import BVFFCalculator
+from bvff.tools.ferroelectric import (
     ideal_perovskite, double_well_scan, well_depth, polarization, relax, run_nvt,
     cation_offcentering, run_validation,
 )

@@ -17,14 +17,14 @@ import dataclasses
 import numpy as np
 import pytest
 
-from parsers.dataset            import load_dataset, DatasetEntry
-from parsers.parameters_parser  import (
+from bvff.parsers.dataset            import load_dataset, DatasetEntry
+from bvff.parsers.parameters_parser  import (
     Parameters, CoulombParams, RepulsiveParams,
     BVParams, BVSpecies, BVPair, BVVParams, BVVSpecies,
 )
-from parsers.controls_parser    import PotentialControls
-from src.potentials             import Coulomb, Repulsive, BV, BVV, BVFF, clear_neighbor_cache
-from src.fitting                import (
+from bvff.parsers.controls_parser    import PotentialControls
+from bvff.core.potentials             import Coulomb, Repulsive, BV, BVV, BVFF, clear_neighbor_cache
+from bvff.core.fitting                import (
     compute_loss, fit, reference_scales,
     bound_saturation_report, build_bounds, params_to_vector, ParamTransform,
 )
@@ -68,10 +68,10 @@ _PC = PotentialControls(
 
 
 @pytest.fixture(scope="module")
-def frames():
+def frames(pto_300k):
     clear_neighbor_cache()
     data = load_dataset(entries=[DatasetEntry(
-        path="examples/PbTiO3/pbtio3_222_300K.parquet",
+        path=str(pto_300k),
         frame_start=100, frame_end=140, stride=5,
     )])
     return data.frames

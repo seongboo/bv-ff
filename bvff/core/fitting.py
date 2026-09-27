@@ -8,13 +8,13 @@ from typing import Callable
 import numpy as np
 from scipy.optimize import dual_annealing, minimize
 
-from parsers.parameters_parser import (
+from bvff.parsers.parameters_parser import (
     Parameters, CoulombParams, RepulsiveParams,
     BVParams, BVSpecies, BVPair,
     BVVParams, BVVSpecies, AngleParams,
     COMMON_ANIONS,
 )
-from parsers.dataset import Frame
+from bvff.parsers.dataset import Frame
 from .outputs import progress_iter
 from .potentials import BVFF
 

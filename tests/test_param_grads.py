@@ -14,8 +14,8 @@ import copy
 import numpy as np
 import pytest
 
-from parsers.dataset import load_dataset, DatasetEntry
-from src.potentials import (
+from bvff.parsers.dataset import load_dataset, DatasetEntry
+from bvff.core.potentials import (
     Repulsive, Buckingham, BV, BVV, Angle, BVFF,
     clear_neighbor_cache,
 )
@@ -35,10 +35,10 @@ _REP    = {"O-O": 1.83, "O-Pb": 2.17, "O-Ti": 1.28}
 
 
 @pytest.fixture(scope="module")
-def frame():
+def frame(pto_300k):
     clear_neighbor_cache()
     data = load_dataset(entries=[DatasetEntry(
-        path        = "examples/PbTiO3/pbtio3_222_300K.parquet",
+        path        = str(pto_300k),
         frame_start = 100, frame_end = 101, stride = 1,
     )])
     return data.frames[0]

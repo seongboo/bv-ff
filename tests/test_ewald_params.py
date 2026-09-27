@@ -13,8 +13,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from parsers.dataset        import load_dataset, DatasetEntry
-from src.extensions.ewald   import (
+from bvff.parsers.dataset        import load_dataset, DatasetEntry
+from bvff.core.extensions.ewald   import (
     Ewald, ewald_parameters, ewald_alpha, ewald_kmax, clear_kvec_cache,
 )
 
@@ -23,9 +23,9 @@ _Q = {"Pb": 1.4, "Ti": 1.0, "O": -0.8}
 
 
 @pytest.fixture(scope="module")
-def frame():
+def frame(pto_300k):
     data = load_dataset(entries=[DatasetEntry(
-        path="examples/PbTiO3/pbtio3_222_300K.parquet",
+        path=str(pto_300k),
         frame_start=100, frame_end=101, stride=1,
     )])
     return data.frames[0]

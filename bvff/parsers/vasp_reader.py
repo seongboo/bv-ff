@@ -89,7 +89,7 @@ def read_vasprun(
         )
 
     if logger:
-        from src.outputs import progress_iter
+        from bvff.core.outputs import progress_iter
         step_iter = progress_iter(selected_steps, label="extract frames")
     else:
         step_iter = selected_steps

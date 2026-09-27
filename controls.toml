@@ -1,7 +1,7 @@
 # Input dataset. Format auto-detected by extension:
 #   *.xml            → VASP vasprun
 #   *.xyz/.extxyz    → extxyz (ASE)
-#   *.parquet/.pq    → long-format AIMD table (see scripts/vasprun2data.py;
+#   *.parquet/.pq    → long-format AIMD table (see bvff/tools/vasprun2data.py;
 #                      must carry Lattice_* columns — BVFF needs a cell)
 #
 # Accepted forms (all collapse to a list of (path, frame_start, frame_end, stride)):

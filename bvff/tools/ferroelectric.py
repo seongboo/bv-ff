@@ -13,22 +13,15 @@ judged on physics rather than on force RMSE alone. They are model-agnostic
 (any BVFF via BVFFCalculator) and need no DFT.
 
 Run as a script for a quick demo on the fitted PbTiO3 potential:
-    python3 scripts/ferroelectric.py
+    bvff-ferroelectric
 """
 from __future__ import annotations
 
-import sys
 from pathlib import Path
-
-# Allow running as a script (`python3 scripts/ferroelectric.py`) by putting the
-# project root on sys.path before the src/ imports. No-op when imported normally.
-_PROJECT_ROOT = Path(__file__).resolve().parent.parent
-if str(_PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(_PROJECT_ROOT))
 
 import numpy as np
 
-from src.calculator import BVFFCalculator
+from bvff.core.calculator import BVFFCalculator
 
 
 # 1 e/Å² = 16.0217663 C/m²  (1.602176634e-19 C / (1e-10 m)²)
@@ -332,7 +325,7 @@ def run_nvt(atoms, calc, temperature_K: float, steps: int = 1000,
 
 
 # ──────────────────────────────────────────────
-# Persisted validation gate (called from src/main.py after every fit; also the
+# Persisted validation gate (called from bvff/core/main.py after every fit; also the
 # script entry point). The ABO3 chemistry is detected from a training frame —
 # works for PbTiO3, BaTiO3, ...
 # ──────────────────────────────────────────────
@@ -443,7 +436,7 @@ def run_validation(
     # 3. Polar-state retention on a REAL data frame.
     retention: dict = {"tested": False}
     if data_frame is not None:
-        from src.calculator import atoms_from_frame
+        from bvff.core.calculator import atoms_from_frame
         a = atoms_from_frame(data_frame)
         a.calc = calc
         u0 = float(np.linalg.norm(cation_offcentering(a, "Ti")))
@@ -578,16 +571,16 @@ def _demo() -> int:
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     log = logging.getLogger("bvff.fe")
 
-    from parsers.controls_parser   import parse_controls
-    from parsers.parameters_parser import parse_parameters
-    from src.main                  import build_bvff
+    from bvff.parsers.controls_parser   import parse_controls
+    from bvff.parsers.parameters_parser import parse_parameters
+    from bvff.core.main                  import build_bvff
 
     controls = parse_controls("controls.toml")
     fitted   = parse_parameters("output/fitted_parameters.toml", validate=True)
 
     data_frame = None
     try:
-        from parsers.dataset import load_dataset
+        from bvff.parsers.dataset import load_dataset
         data_frame = load_dataset(entries=controls.dataset).frames[0]
     except Exception as exc:                                  # pragma: no cover
         log.info(f"  (no data frame — retention test will be skipped: {exc})")

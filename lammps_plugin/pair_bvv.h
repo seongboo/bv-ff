@@ -6,7 +6,7 @@
 
    with V_ij either the Brown-Altermatt exponential exp((r0-r)/b) or the
    Brown power law (r0/r)^C, tapered by the same C2 cutoff switch as the
-   Python reference implementation (src/potentials.py).
+   Python reference implementation (bvff/core/potentials.py).
 
    EAM-like two-pass structure: accumulate the per-atom vector density W,
    reverse-communicate ghost contributions, then a pair force pass using

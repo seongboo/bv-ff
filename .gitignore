@@ -28,3 +28,6 @@ run_refit.out
 
 # Local Claude Code settings
 .claude/settings.local.json
+
+# Editable-install metadata
+*.egg-info/

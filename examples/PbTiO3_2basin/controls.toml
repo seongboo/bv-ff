@@ -2,7 +2,7 @@
 # The two runs use different k-meshes → different energy references, so they are
 # put in separate ref_groups (one energy offset removed per group; within-group
 # energetics fit). This gives the FF both basins' geometries/forces. Run from
-# this directory:  python3 ../../src/main.py
+# this directory:  bvff-fit
 #
 # Dataset entries carry per-entry ref_group + channel weights. The cubic basin's
 # forces are down-weighted (weight_F=0.3) since the polar phase is the target;

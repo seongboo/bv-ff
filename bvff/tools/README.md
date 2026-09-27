@@ -1,11 +1,27 @@
-# scripts/
+# bvff/tools/
 
-Utility scripts that sit outside the main `src/` pipeline.
+Utilities that sit outside the main `bvff.core` pipeline. After
+`pip install -e .` (repo root) every CLI is on `PATH` as a `bvff-*` command and
+works from any directory:
+
+| Command | Module |
+|---------|--------|
+| `bvff-fit`             | `bvff.core.main` (the fitting pipeline; run from a fit directory) |
+| `bvff-gen-controls`    | `gen_controls.py` |
+| `bvff-ferroelectric`   | `ferroelectric.py` |
+| `bvff-export-lammps`   | `export_lammps.py` |
+| `bvff-tc-scan`         | `tc_scan.py` |
+| `bvff-benchmark`       | `benchmark.py` |
+| `bvff-gen-poscars`     | `gen_poscars.py` |
+| `bvff-gen-dft-dataset` | `gen_dft_dataset.py` |
+| `bvff-vasprun2data`    | `vasprun2data.py` |
+
+`python -m bvff.tools.<module>` is equivalent.
 
 | File | Type | Purpose |
 |------|------|---------|
 | `gen_controls.py`   | CLI | Generate a `controls.toml` with sensible defaults. |
-| `analysis.py`       | library | RMSE / parity / force-distribution plots. Imported by `src/main.py` (Step 6/7). |
+| `analysis.py`       | library | RMSE / parity / force-distribution plots. Imported by `bvff/core/main.py` (Step 6/7). |
 | `ferroelectric.py`  | CLI + library | Ferroelectric validation gate: double-well scan, point-charge polarization, polar retention, NVT stability. `run_validation()` runs as Step 7/7 of every fit and persists `ferroelectric_validation.toml` + `double_well.png`; run standalone from a fit directory for a nonzero exit code on failure. |
 | `gen_poscars.py`    | CLI | Generate the static DFT training-structure set (cubic EOS, tetragonal GS, double-well path, c/a scan) as POSCARs. |
 | `gen_dft_dataset.py` | CLI | Generate full VASP input dirs (INCAR/KPOINTS/POSCAR) for the PbTiO3 cell/stress training set — phase relaxations, strain grid, rattled AIMD frames — on the same ENCUT/Γ-only k reference as the P4mm AIMD. |
@@ -21,18 +37,18 @@ CLI that emits a valid `controls.toml` for the current dataset schema. Run it on
 
 ```bash
 # Single vasprun (default file name)
-python scripts/gen_controls.py
+bvff-gen-controls
 # → writes controls.toml with dataset = "vasprun.xml"
 
 # Single extxyz / vasprun explicitly
-python scripts/gen_controls.py path/to/file.extxyz
+bvff-gen-controls path/to/file.extxyz
 
 # Multiple files, shared window  →  dataset = ["a", "b", ...]
-python scripts/gen_controls.py data/300K.extxyz data/600K.extxyz \
+bvff-gen-controls data/300K.extxyz data/600K.extxyz \
     --frame-start 100 --stride 10
 
 # Per-file window (table-array form) so each file can be edited independently
-python scripts/gen_controls.py data/300K.extxyz data/900K.extxyz --per-file
+bvff-gen-controls data/300K.extxyz data/900K.extxyz --per-file
 ```
 
 ### Behavior
@@ -75,21 +91,21 @@ python scripts/gen_controls.py data/300K.extxyz data/900K.extxyz --per-file
 |             | `--patience`                | `0` (off)     |
 |             | `--maxiter`                 | `1000`        |
 
-Run `python scripts/gen_controls.py --help` for the full list.
+Run `bvff-gen-controls --help` for the full list.
 
 ### Examples
 
 ```bash
 # Force-only fit, drop BVV, heavier force weight
-python scripts/gen_controls.py vasprun.xml \
+bvff-gen-controls vasprun.xml \
     --no-bvv --task force --w-F 2.0
 
 # Direct Coulomb (no Ewald), angle term on
-python scripts/gen_controls.py vasprun.xml \
+bvff-gen-controls vasprun.xml \
     --no-ewald --angle
 
 # Multi-temperature, per-file window
-python scripts/gen_controls.py \
+bvff-gen-controls \
     data/300K.extxyz data/600K.extxyz data/900K.extxyz \
     --per-file
 # → edit the [[dataset]] blocks in controls.toml to tune each file
@@ -99,7 +115,7 @@ python scripts/gen_controls.py \
 
 ## analysis.py
 
-Not a standalone script — it is imported by `src/main.py` and runs as Step 6/7 of the pipeline. After fitting, it produces:
+Not a standalone script — it is imported by `bvff/core/main.py` and runs as Step 6/7 of the pipeline. After fitting, it produces:
 
 | File (in `output_dir/`) | Contents |
 |-------------------------|----------|
@@ -110,7 +126,7 @@ Not a standalone script — it is imported by `src/main.py` and runs as Step 6/7
 Reusable functions if you want to call analysis from your own script:
 
 ```python
-from scripts.analysis import (
+from bvff.tools.analysis import (
     collect_predictions,   # bvff, frames → dict of e_*/f_* arrays
     compute_rmse,          # (pred, ref)  → float
     plot_parity,           # train_data, test_data, output_dir

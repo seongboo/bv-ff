@@ -1,10 +1,8 @@
 # Packaging metadata for the BVFF fitting code.
 #
-# The historical layout is kept: `src`, `parsers`, and `scripts` are top-level
-# packages (imports are `from src.potentials import ...` etc.). An editable
-# install (`pip install -e .`) makes those imports work from anywhere and
-# removes the need for the sys.path hacks in src/main.py / scripts/*.py —
-# note the generic top-level names, so install into a dedicated environment.
+# Everything lives under the single `bvff` package (bvff.core / bvff.parsers /
+# bvff.tools). Install editable (`pip install -e .`) so imports and the
+# `bvff-*` commands work from any directory.
 
 [build-system]
 requires = ["setuptools>=64"]
@@ -26,11 +24,22 @@ dependencies = [
 [project.optional-dependencies]
 vasp    = ["pymatgen"]           # vasprun.xml reader
 parquet = ["pandas", "pyarrow"]  # long-format AIMD parquet reader
-plot    = ["matplotlib"]         # scripts/analysis.py figures
+plot    = ["matplotlib"]         # bvff/tools/analysis.py figures
 test    = ["pytest"]
 
-[tool.setuptools]
-packages = ["src", "src.extensions", "parsers", "scripts"]
+[project.scripts]
+bvff-fit             = "bvff.core.main:main"
+bvff-export-lammps   = "bvff.tools.export_lammps:main"
+bvff-ferroelectric   = "bvff.tools.ferroelectric:_demo"
+bvff-tc-scan         = "bvff.tools.tc_scan:_main"
+bvff-benchmark       = "bvff.tools.benchmark:main"
+bvff-gen-controls    = "bvff.tools.gen_controls:main"
+bvff-gen-poscars     = "bvff.tools.gen_poscars:main"
+bvff-gen-dft-dataset = "bvff.tools.gen_dft_dataset:main"
+bvff-vasprun2data    = "bvff.tools.vasprun2data:main"
+
+[tool.setuptools.packages.find]
+include = ["bvff*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

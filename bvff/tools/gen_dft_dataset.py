@@ -130,7 +130,7 @@ def set_D(out: Path, aimd: str, n: int, seed: int):
                    {"IBRION": -1, "ISIF": 2, "NSW": 0}, f"D rattle frame={i} k={k}")
 
 
-if __name__ == "__main__":
+def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--out", default="dft_bvff")
     ap.add_argument("--aimd", default="examples/PbTiO3/pbtio3_222_300K.parquet",
@@ -148,3 +148,7 @@ if __name__ == "__main__":
     if "D" in a.only: set_D(out, a.aimd, a.n_rattle, a.seed)
     n = sum(1 for _ in out.rglob("INCAR"))
     print(f"{n} calculation directories under {out}/  (add POTCAR: Pb_d, Ti_pv, O)")
+
+
+if __name__ == "__main__":
+    main()

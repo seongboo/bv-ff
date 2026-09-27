@@ -11,13 +11,13 @@ from collections import Counter
 import numpy as np
 import pytest
 
-from parsers.dataset           import load_dataset, DatasetEntry
-from parsers.parameters_parser import (
+from bvff.parsers.dataset           import load_dataset, DatasetEntry
+from bvff.parsers.parameters_parser import (
     Parameters, CoulombParams, RepulsiveParams, BVParams, BVSpecies, BVPair,
 )
-from parsers.controls_parser   import PotentialControls
-from src.potentials            import Coulomb, Repulsive, BV, BVFF, clear_neighbor_cache
-from src.fitting               import (
+from bvff.parsers.controls_parser   import PotentialControls
+from bvff.core.potentials            import Coulomb, Repulsive, BV, BVFF, clear_neighbor_cache
+from bvff.core.fitting               import (
     compute_loss, _residuals, reference_scales, build_frame_weights,
     params_to_vector,
 )
@@ -50,10 +50,10 @@ def _builder(p):
 
 
 @pytest.fixture(scope="module")
-def frames():
+def frames(pto_300k):
     clear_neighbor_cache()
     d = load_dataset(entries=[DatasetEntry(
-        path="examples/PbTiO3/pbtio3_222_300K.parquet",
+        path=str(pto_300k),
         frame_start=100, frame_end=160, stride=5)])
     return d.frames
 

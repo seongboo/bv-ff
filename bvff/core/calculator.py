@@ -23,7 +23,7 @@ from .potentials import BVFF
 
 
 class BVFFCalculator(Calculator):
-    """ASE calculator backed by a fitted :class:`~src.potentials.BVFF`."""
+    """ASE calculator backed by a fitted :class:`~bvff.core.potentials.BVFF`."""
 
     implemented_properties = ["energy", "free_energy", "forces", "stress"]
 

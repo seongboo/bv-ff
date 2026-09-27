@@ -16,22 +16,17 @@ qualitative bracket; use --npt for the physical estimate.
 
 Run from a fit directory (controls.toml + output/fitted_parameters.toml):
 
-    python3 scripts/tc_scan.py --temps 100 300 500 700 900 --steps 4000 --npt
+    bvff-tc-scan --temps 100 300 500 700 900 --steps 4000 --npt
 
 Writes tc_scan.csv and tc_scan.png into the run's output directory.
 """
 from __future__ import annotations
 
-import sys
 from pathlib import Path
-
-_PROJECT_ROOT = Path(__file__).resolve().parent.parent
-if str(_PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(_PROJECT_ROOT))
 
 import numpy as np
 
-from scripts.ferroelectric import cation_offcentering
+from .ferroelectric import cation_offcentering
 
 
 def scan_temperatures(
@@ -150,11 +145,11 @@ def _main() -> int:
     ap.add_argument("--seed", type=int, default=0)
     args = ap.parse_args()
 
-    from parsers.controls_parser   import parse_controls
-    from parsers.parameters_parser import parse_parameters
-    from parsers.dataset           import load_dataset
-    from src.main                  import build_bvff
-    from src.calculator            import BVFFCalculator, atoms_from_frame
+    from bvff.parsers.controls_parser   import parse_controls
+    from bvff.parsers.parameters_parser import parse_parameters
+    from bvff.parsers.dataset           import load_dataset
+    from bvff.core.main                  import build_bvff
+    from bvff.core.calculator            import BVFFCalculator, atoms_from_frame
 
     controls = parse_controls("controls.toml")
     fitted   = parse_parameters("output/fitted_parameters.toml", validate=True)

@@ -1,7 +1,7 @@
 # BaTiO3 single-basin fit: polar P4mm NVT AIMD, four temperatures.
 # BaTiO3 has no cubic MD (polar-only data — see the parquet README), so this is
 # the analogue of the repo-root PbTiO3 fit: one ref_group, energies fit up to a
-# constant within it. Run from this directory:  python3 ../../src/main.py
+# constant within it. Run from this directory:  bvff-fit
 #
 # Each parquet holds 4000 NVT steps (2x2x2 P4mm cell, 40 atoms, with stress).
 # Skip 100 equilibration steps and sub-sample by 200 → ~20 frames/temperature,

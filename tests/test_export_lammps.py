@@ -2,7 +2,7 @@
 LAMMPS export writers: the eam/fs tables must reproduce the Python term
 functions numerically (they are generated THROUGH those functions, so this
 guards the file layout and unit conventions, not re-derives the physics).
-Running LAMMPS itself is exercised by scripts/export_lammps.py --validate;
+Running LAMMPS itself is exercised by bvff/tools/export_lammps.py --validate;
 these tests need no LAMMPS binary.
 """
 from __future__ import annotations
@@ -10,12 +10,12 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from parsers.parameters_parser import (
+from bvff.parsers.parameters_parser import (
     Parameters, CoulombParams, BuckinghamParams, BuckinghamPair,
     BVParams, BVSpecies, BVPair, BVVParams, BVVSpecies,
 )
-from scripts.export_lammps import write_eam_fs, write_bvv, NRHO, NR, RHO_MAX
-from src.potentials import BV, Buckingham
+from bvff.tools.export_lammps import write_eam_fs, write_bvv, NRHO, NR, RHO_MAX
+from bvff.core.potentials import BV, Buckingham
 
 
 def _params() -> Parameters:

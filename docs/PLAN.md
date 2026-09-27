@@ -13,20 +13,20 @@ NequIP을 결합한 강화 BVFF(NequIP-BVFF)로 확장한다.
 
 ## 현재 코드 요약
 
-- Python 3.12, `pymatgen`, `scipy`, `tomllib`
-- 입력: `controls.toml`, `parameters.toml`; 데이터: VASP `vasprun.xml`
+- Python ≥ 3.11, `numpy`, `scipy`, `ase`, `joblib` (+ `pandas`/`pyarrow`, `pymatgen`); `pip install -e .`로 설치, `bvff-*` 명령 제공
+- 입력: `controls.toml`, `parameters.toml`; 데이터: AIMD parquet (주), VASP `vasprun.xml`, extxyz
 - 에너지: E_tot = E_repulsive + E_coulomb + E_BV + E_BVV (+ E_angle), `controls.toml`로 토글
-- Ewald: `src/extensions/ewald.py` (실공간, 역공간, 표면항, 자기에너지)
+- Ewald: `bvff/core/extensions/ewald.py` (실공간, 역공간, 표면항, 자기에너지)
 - Fitting: multi-start least squares 기본 (SA 옵션), σ-정규화 손실, 종별 에너지 기준 profiling, V0 고정
 - Cutoff: quintic (C²)
-- 구조: `io/`, `src/main.py`, `src/potentials.py`, `src/fitting.py`, `scripts/analysis.py`
+- 구조: 단일 패키지 `bvff/` — `core/` (`main.py`, `potentials.py`, `fitting.py`, `outputs.py`, `calculator.py`, `extensions/`), `parsers/` (controls/parameters/dataset 리더), `tools/` (CLI 유틸리티)
 
 ---
 
 ## Phase 1. BVFF 확립
 
 ### 1-1. 코드 마무리
-- [ ] `__init__.py`와 import 경로 정리 (어느 디렉토리에서 실행해도 동작)
+- [x] `__init__.py`와 import 경로 정리 (어느 디렉토리에서 실행해도 동작) — `src`/`parsers`/`scripts` → `bvff.core`/`bvff.parsers`/`bvff.tools`, `sys.path` 조작 제거, `bvff-*` 명령, 테스트 데이터 경로는 저장소 루트 기준
 - [ ] 장시간 계산의 진행 출력: `flush=True`, fitting 반복별 로깅, vasprun 읽기/에너지 계산 진행 표시
 - [ ] `lattice_vectors @ frac_vector` 방향 문제 검토 (행 벡터/열 벡터 규약 통일). 단사정·삼사정 셀 테스트 케이스로 확인
 

@@ -13,7 +13,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from src.potentials import BV, BVV, clear_neighbor_cache
+from bvff.core.potentials import BV, BVV, clear_neighbor_cache
 
 
 def _dimer(r: float, species, box: float = 15.0):

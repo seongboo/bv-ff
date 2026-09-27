@@ -1,7 +1,7 @@
 /* ----------------------------------------------------------------------
    Bond-valence vector (BVV) pair style — see pair_bvv.h.
 
-   Reference implementation: M3L/bv-ff/src/potentials.py (class BVV).
+   Reference implementation: M3L/bv-ff/bvff/core/potentials.py (class BVV).
    The force formulas are a literal transcription of BVV._pair_engine:
 
      c_x   = D_x (|W_x|^2 - W0_x^2)
@@ -9,7 +9,7 @@
      df_i  = 4 (dV - V/r)(v.rhat) rhat + 4 (V/r) v
      f_j   = -df_i
 
-   Parameter file (whitespace/# tolerant), written by scripts/export_lammps.py:
+   Parameter file (whitespace/# tolerant), written by bvff/tools/export_lammps.py:
 
      cutoff        6.0
      smooth_width  1.0

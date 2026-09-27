@@ -6,24 +6,23 @@ from __future__ import annotations
 import tomllib
 from types import SimpleNamespace
 
-from parsers.controls_parser import Controls
-from parsers.dataset import DatasetEntry
-from src.outputs import save_provenance
+from bvff.parsers.controls_parser import Controls
+from bvff.parsers.dataset import DatasetEntry
+from bvff.core.outputs import save_provenance
 
-
-_PARQUET = "examples/PbTiO3/pbtio3_222_300K.parquet"
 
 
 def _fake_frame(source: str) -> SimpleNamespace:
     return SimpleNamespace(source=source)
 
 
-def test_provenance_roundtrip(tmp_path):
+def test_provenance_roundtrip(tmp_path, pto_300k):
+    parquet = str(pto_300k)
     controls = Controls(dataset=[DatasetEntry(
-        path=_PARQUET, frame_start=100, frame_end=-1, stride=200,
+        path=parquet, frame_start=100, frame_end=-1, stride=200,
     )])
-    train = [_fake_frame(_PARQUET)] * 3
-    test  = [_fake_frame(_PARQUET)] * 2
+    train = [_fake_frame(parquet)] * 3
+    test  = [_fake_frame(parquet)] * 2
     diag  = {
         "optimizer": "least_squares", "jacobian": "analytic",
         "n_parameters": 27, "n_starts": 1, "log_space": True,
@@ -42,12 +41,12 @@ def test_provenance_roundtrip(tmp_path):
     assert doc["split"] == {"n_train": 3, "n_test": 2,
                             "mode": controls.split_mode, "seed": 0}
     ds = doc["dataset"][0]
-    assert ds["path"] == _PARQUET
+    assert ds["path"] == parquet
     assert len(ds["sha256"]) == 16 and ds["sha256"] != "unreadable"
     assert ds["n_train"] == 3 and ds["n_test"] == 2
     # Source hashes present for the core modules; combined hash pins the tree.
     files = doc["source"]["files"]
-    assert "src/potentials.py" in files and "parsers/defaults.py" in files
+    assert "bvff/core/potentials.py" in files and "bvff/parsers/defaults.py" in files
     assert len(doc["source"]["combined_sha256"]) == 16
     # Controls snapshot: resolved values, nested sections included.
     assert doc["controls"]["fitting"]["jac"] == "analytic"

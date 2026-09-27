@@ -13,11 +13,11 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from parsers.dataset      import load_dataset, DatasetEntry
-from src.potentials       import (
+from bvff.parsers.dataset      import load_dataset, DatasetEntry
+from bvff.core.potentials       import (
     Coulomb, Repulsive, BV, BVV, BVFF, clear_neighbor_cache,
 )
-from src.extensions.ewald import Ewald, clear_kvec_cache
+from bvff.core.extensions.ewald import Ewald, clear_kvec_cache
 
 
 CUTOFF = 6.0
@@ -31,11 +31,11 @@ _BVV_SP  = {"Pb": {"W0": 0.5, "D": 0.1}, "Ti": {"W0": 0.3, "D": 0.1}, "O": {"W0"
 
 
 @pytest.fixture(scope="module")
-def frame():
+def frame(pto_300k):
     clear_neighbor_cache()
     clear_kvec_cache()
     data = load_dataset(entries=[DatasetEntry(
-        path="examples/PbTiO3/pbtio3_222_300K.parquet", frame_start=100, frame_end=101, stride=1,
+        path=str(pto_300k), frame_start=100, frame_end=101, stride=1,
     )])
     return data.frames[0]
 

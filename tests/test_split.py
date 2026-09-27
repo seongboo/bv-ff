@@ -1,6 +1,6 @@
 """
-Train/test split modes (src/main.py split_frames) and the dataset ``split``
-value normalization (parsers/controls_parser._norm_split).
+Train/test split modes (bvff/core/main.py split_frames) and the dataset ``split``
+value normalization (bvff/parsers/controls_parser._norm_split).
 
 The random within-trajectory split of time-correlated AIMD frames guarantees
 train≈test RMSE by construction; ``split_mode="block"`` (hold out the
@@ -13,9 +13,9 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from parsers.dataset         import Dataset, Frame
-from parsers.controls_parser import _norm_split
-from src.main                import split_frames
+from bvff.parsers.dataset         import Dataset, Frame
+from bvff.parsers.controls_parser import _norm_split
+from bvff.core.main                import split_frames
 
 
 def _mk(idx: int, source: str, split=True, ref_group="default") -> Frame:
@@ -94,7 +94,7 @@ def test_gen_controls_emits_refit_keys(tmp_path):
     charges, Tikhonov, block split) must be generatable — not hand-edited —
     and the result must parse."""
     import tomllib
-    from scripts.gen_controls import _build_parser, build_toml
+    from bvff.tools.gen_controls import _build_parser, build_toml
 
     args = _build_parser().parse_args([
         "data.parquet", "--buckingham", "--bv-form", "exp",

@@ -12,26 +12,26 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from parsers.controls_parser import PotentialControls
-from parsers.dataset import load_dataset, DatasetEntry
-from parsers.parameters_parser import (
+from bvff.parsers.controls_parser import PotentialControls
+from bvff.parsers.dataset import load_dataset, DatasetEntry
+from bvff.parsers.parameters_parser import (
     Parameters, RepulsiveParams, BuckinghamParams, BuckinghamPair,
     BVParams, BVSpecies, BVPair, BVVParams, BVVSpecies, CoulombParams,
 )
-from src.fitting import (
+from bvff.core.fitting import (
     params_to_vector, build_bounds, ParamTransform, build_frame_weights,
     reference_scales, _residuals_z, _jacobian_z, fit,
 )
-from src.potentials import (
+from bvff.core.potentials import (
     Coulomb, Repulsive, Buckingham, BV, BVV, BVFF, clear_neighbor_cache,
 )
 
 
 @pytest.fixture(scope="module")
-def frames():
+def frames(pto_300k):
     clear_neighbor_cache()
     data = load_dataset(entries=[DatasetEntry(
-        path        = "examples/PbTiO3/pbtio3_222_300K.parquet",
+        path        = str(pto_300k),
         frame_start = 100, frame_end = 181, stride = 20,
     )])
     frs = data.frames
@@ -169,7 +169,7 @@ def test_multistart_least_squares_runs(frames):
 
 
 def test_controls_jac_validation(tmp_path):
-    from parsers.controls_parser import parse_controls
+    from bvff.parsers.controls_parser import parse_controls
     (tmp_path / "d.extxyz").write_text("")
     bad = tmp_path / "controls.toml"
     bad.write_text(

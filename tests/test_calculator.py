@@ -11,9 +11,9 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from parsers.dataset   import load_dataset, DatasetEntry
-from src.potentials    import Coulomb, Repulsive, BV, BVV, BVFF, clear_neighbor_cache
-from src.calculator    import BVFFCalculator, atoms_from_frame
+from bvff.parsers.dataset   import load_dataset, DatasetEntry
+from bvff.core.potentials    import Coulomb, Repulsive, BV, BVV, BVFF, clear_neighbor_cache
+from bvff.core.calculator    import BVFFCalculator, atoms_from_frame
 
 
 CUTOFF = 6.0
@@ -35,10 +35,10 @@ def _bvff():
 
 
 @pytest.fixture(scope="module")
-def frame():
+def frame(pto_300k):
     clear_neighbor_cache()
     data = load_dataset(entries=[DatasetEntry(
-        path="examples/PbTiO3/pbtio3_222_300K.parquet",
+        path=str(pto_300k),
         frame_start=100, frame_end=101, stride=1,
     )])
     return data.frames[0]

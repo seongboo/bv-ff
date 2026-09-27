@@ -8,9 +8,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 
-from parsers.dataset import Frame
-from src.outputs import progress_iter
-from src.potentials import BVFF
+from bvff.parsers.dataset import Frame
+from bvff.core.outputs import progress_iter
+from bvff.core.potentials import BVFF
 
 logger = logging.getLogger("bvff")
 

@@ -5,17 +5,17 @@ Generate a `controls.toml` for bvff.
 Examples
 --------
 # Single vasprun
-python scripts/gen_controls.py examples/PbTiO3/vasprun.xml
+bvff-gen-controls examples/PbTiO3/vasprun.xml
 
 # Multiple extxyz files sharing the same window
-python scripts/gen_controls.py data/300K.extxyz data/600K.extxyz \\
+bvff-gen-controls data/300K.extxyz data/600K.extxyz \\
     --frame-start 100 --stride 10
 
 # Per-file table-array form (each file gets its own editable window)
-python scripts/gen_controls.py data/300K.extxyz data/900K.extxyz --per-file
+bvff-gen-controls data/300K.extxyz data/900K.extxyz --per-file
 
 # Disable a potential, tune fitting
-python scripts/gen_controls.py vasprun.xml --no-bvv --task force --w-F 2.0
+bvff-gen-controls vasprun.xml --no-bvv --task force --w-F 2.0
 """
 from __future__ import annotations
 

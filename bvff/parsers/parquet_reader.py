@@ -10,7 +10,7 @@ from .dataset import Frame, Dataset, KBAR_PER_EV_PER_ANG3
 
 
 # ──────────────────────────────────────────────
-# Expected column schema (produced by scripts/vasprun2data.py)
+# Expected column schema (produced by bvff/tools/vasprun2data.py)
 # ──────────────────────────────────────────────
 #
 # The parquet is stored in *long* format: one row per (Step, Atom_Index).
@@ -27,7 +27,7 @@ _LATTICE_COLS = [
 ]
 # Optional virial stress in Voigt order (xx, yy, zz, yz, xz, xy), stored in
 # the file as kBar with VASP's sign (straight from vasprun.xml via
-# scripts/vasprun2data.py); converted to eV/Å³ ASE convention on read.
+# bvff/tools/vasprun2data.py); converted to eV/Å³ ASE convention on read.
 _STRESS_COLS  = [
     "Stress_xx", "Stress_yy", "Stress_zz",
     "Stress_yz", "Stress_xz", "Stress_xy",
@@ -57,7 +57,7 @@ def read_parquet(
     """
     Read an AIMD trajectory stored as a long-format parquet and return a Dataset.
 
-    Expected columns (see ``scripts/vasprun2data.py``):
+    Expected columns (see ``bvff/tools/vasprun2data.py``):
         Step, Atom_Index, Element,
         X, Y, Z                     -- Cartesian positions in Å
         Force_X, Force_Y, Force_Z   -- forces in eV/Å
@@ -97,7 +97,7 @@ def read_parquet(
             f"parquet '{filepath}' has no lattice columns ({_LATTICE_COLS}). "
             f"BVFF needs a cell for every frame (Ewald, BV neighbour search). "
             f"Regenerate the parquet with cell information using "
-            f"scripts/vasprun2data.py (which now writes the Lattice_* columns)."
+            f"bvff/tools/vasprun2data.py (which now writes the Lattice_* columns)."
         )
 
     has_stress = all(c in df.columns for c in _STRESS_COLS)
@@ -129,7 +129,7 @@ def read_parquet(
     groups = {step: g for step, g in sub.groupby("Step", sort=True)}
 
     if logger:
-        from src.outputs import progress_iter
+        from bvff.core.outputs import progress_iter
         step_iter = progress_iter(list(enumerate(sel_steps)), label="extract frames")
     else:
         step_iter = list(enumerate(sel_steps))

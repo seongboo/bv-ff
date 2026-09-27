@@ -240,14 +240,14 @@ def save_provenance(
     from collections import Counter
     import tomli_w
 
-    root = Path(__file__).resolve().parent.parent
+    root = Path(__file__).resolve().parents[1]        # the bvff/ package
 
     src_hashes = {}
-    for sub in ("src", "src/extensions", "parsers", "scripts"):
+    for sub in ("core", "core/extensions", "parsers", "tools"):
         d = root / sub
         if d.is_dir():
             for f in sorted(d.glob("*.py")):
-                src_hashes[f"{sub}/{f.name}"] = _sha256_file(f)
+                src_hashes[f"bvff/{sub}/{f.name}"] = _sha256_file(f)
     combined = hashlib.sha256(
         "".join(f"{k}{v}" for k, v in sorted(src_hashes.items())).encode()
     ).hexdigest()[:16]

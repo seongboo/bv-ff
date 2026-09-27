@@ -16,14 +16,14 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from parsers.controls_parser import PotentialControls
-from parsers.defaults import DEFAULT_CONTROLS, DEFAULT_PARAMETERS
-from parsers.parameters_parser import (
+from bvff.parsers.controls_parser import PotentialControls
+from bvff.parsers.defaults import DEFAULT_CONTROLS, DEFAULT_PARAMETERS
+from bvff.parsers.parameters_parser import (
     Parameters, _generate_bv_pairs, generate_parameters,
     save_parameters, parse_parameters, _validate,
 )
-from src.potentials import Repulsive, BVFF
-from src.outputs import save_results, predict_with_progress
+from bvff.core.potentials import Repulsive, BVFF
+from bvff.core.outputs import save_results, predict_with_progress
 
 
 # ──────────────────────────────────────────────

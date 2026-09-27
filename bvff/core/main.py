@@ -3,24 +3,17 @@ from __future__ import annotations
 import logging
 import math
 import random
-import sys
 import time
 from collections import Counter
 from pathlib import Path
 
-# Allow running as a script (e.g. `python3 ../../src/main.py`) by putting the
-# project root on sys.path. When imported as `src.main` this is a no-op.
-_PROJECT_ROOT = Path(__file__).resolve().parent.parent
-if str(_PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(_PROJECT_ROOT))
-
-from parsers.controls_parser import parse_controls, Controls
-from parsers.parameters_parser import parse_parameters, Parameters, save_parameters
-from parsers.dataset import load_dataset, Dataset, Frame
-from src.potentials import Potential, Coulomb, Repulsive, Buckingham, BV, BVV, Angle, BVFF
-from src.extensions.ewald import Ewald, ewald_alpha
-from src.fitting import fit
-from src.outputs import setup_logger, section, save_results, save_provenance
+from bvff.parsers.controls_parser import parse_controls, Controls
+from bvff.parsers.parameters_parser import parse_parameters, Parameters, save_parameters
+from bvff.parsers.dataset import load_dataset, Dataset, Frame
+from .potentials import Potential, Coulomb, Repulsive, Buckingham, BV, BVV, Angle, BVFF
+from .extensions.ewald import Ewald, ewald_alpha
+from .fitting import fit
+from .outputs import setup_logger, section, save_results, save_provenance
 
 
 # ──────────────────────────────────────────────
@@ -164,7 +157,7 @@ def build_bvff(
                 "extensions.efield is nonzero but no [coulomb] charges are "
                 "defined — the field couples to the rigid-ion charges."
             )
-        from src.extensions.efield import EField
+        from .extensions.efield import EField
         terms.append(EField(charges=params.coulomb.charges, field=ext.efield))
         if logger:
             logger.warning(
@@ -438,7 +431,7 @@ def main():
     # should not need just to import this module.
     section(logger, "Step 6/7: Running analysis & plots")
     t0 = time.time()
-    from scripts.analysis import run_analysis
+    from bvff.tools.analysis import run_analysis
     analysis_test = test_frames
     if not test_frames:
         # Legitimate config (every entry pinned split=false), but the analysis
@@ -471,8 +464,8 @@ def main():
         )
     else:
         t0 = time.time()
-        from scripts.ferroelectric import run_validation
-        from src.calculator import BVFFCalculator
+        from bvff.tools.ferroelectric import run_validation
+        from .calculator import BVFFCalculator
         # Retention needs a REPRESENTATIVE polar frame: prefer a ratio-split
         # trajectory frame — split=false anchors are appended first and may be
         # e.g. a 5-atom cubic-EOS cell where retention is meaningless.

@@ -26,8 +26,8 @@ g++ -std=c++17 -O2 -shared -fPIC \
 From a fit directory (`controls.toml` + `output/fitted_parameters.toml`):
 
 ```sh
-python3 ../../scripts/export_lammps.py                 # writes lammps_export/
-python3 ../../scripts/export_lammps.py --validate --lmp /path/to/lmp
+bvff-export-lammps                 # writes lammps_export/
+bvff-export-lammps --validate --lmp /path/to/lmp
 ```
 
 `lammps_export/in.bvff` is a ready single-point input; extend with
@@ -42,7 +42,7 @@ Single-point vs the Python reference on a 40-atom training frame:
 atoms; ~350× the NequIP ML-IAP CPU baseline at 40 atoms.
 
 This cross-validation is what exposed the exp-form phantom-bond bug
-(unparameterized pairs contributing exp(−r); fixed in src/potentials.py the
+(unparameterized pairs contributing exp(−r); fixed in bvff/core/potentials.py the
 same day) — keep running `--validate` after every refit.
 
 ## pair_style bvv parameter file

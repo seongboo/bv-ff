@@ -1,10 +1,10 @@
 """
 Convert VASP AIMD trajectories (vasprun.xml) into the long-format parquet that
-the BVFF dataset loader (parsers/parquet_reader.py) expects.
+the BVFF dataset loader (bvff/parsers/parquet_reader.py) expects.
 
 One parquet per trajectory; several vasprun.xml files (e.g. step_0-2000,
 step_2000-4000, ...) are concatenated in order with continuous Step numbering.
-Columns match parsers/parquet_reader.py / parsers/vasp_reader.py conventions:
+Columns match bvff/parsers/parquet_reader.py / bvff/parsers/vasp_reader.py conventions:
 
     Step, Atom_Index, Element,
     X, Y, Z                    Cartesian positions (Å)
@@ -17,10 +17,10 @@ Columns match parsers/parquet_reader.py / parsers/vasp_reader.py conventions:
                                kBar→eV/Å³ via /1602.18 with VASP's sign flip.
 
 Energy/stress/position conventions are taken straight from pymatgen (same as
-parsers/vasp_reader.py) so vasprun- and parquet-loaded data are identical.
+bvff/parsers/vasp_reader.py) so vasprun- and parquet-loaded data are identical.
 
 CLI:
-    python scripts/vasprun2data.py OUT.parquet vr1/vasprun.xml [vr2/vasprun.xml ...]
+    bvff-vasprun2data OUT.parquet vr1/vasprun.xml [vr2/vasprun.xml ...]
 """
 from __future__ import annotations
 
@@ -114,7 +114,7 @@ def convert(vasprun_paths, out_path, log=print) -> dict:
 def main():
     if len(sys.argv) < 3:
         print(__doc__)
-        print("usage: python scripts/vasprun2data.py OUT.parquet vasprun1.xml [vasprun2.xml ...]")
+        print("usage: bvff-vasprun2data OUT.parquet vasprun1.xml [vasprun2.xml ...]")
         sys.exit(1)
     out = sys.argv[1]
     vrs = sys.argv[2:]

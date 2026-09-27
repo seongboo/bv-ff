@@ -7,13 +7,13 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from scripts.ferroelectric import (
+from bvff.tools.ferroelectric import (
     ideal_perovskite, perovskite_zstar, polarization_bec, gamma_phonons,
     ZSTAR_TABLE, E_PER_ANG2_TO_C_PER_M2,
 )
-from scripts.tc_scan import scan_temperatures, estimate_tc
-from src.extensions.efield import EField
-from src.potentials import Repulsive, BV, BVFF, clear_neighbor_cache
+from bvff.tools.tc_scan import scan_temperatures, estimate_tc
+from bvff.core.extensions.efield import EField
+from bvff.core.potentials import Repulsive, BV, BVFF, clear_neighbor_cache
 
 
 _CHARGES = {"Pb": 1.4, "Ti": 1.0, "O": -0.8}
@@ -146,10 +146,10 @@ def test_efield_stress_matches_fd():
 
 
 def test_build_bvff_wires_efield(tmp_path):
-    from parsers.controls_parser import parse_controls
-    from parsers.parameters_parser import Parameters, CoulombParams, RepulsiveParams
-    from src.main import build_bvff
-    from src.extensions.efield import EField as EF
+    from bvff.parsers.controls_parser import parse_controls
+    from bvff.parsers.parameters_parser import Parameters, CoulombParams, RepulsiveParams
+    from bvff.core.main import build_bvff
+    from bvff.core.extensions.efield import EField as EF
 
     c = tmp_path / "controls.toml"
     d = tmp_path / "d.extxyz"; d.write_text("")
@@ -176,7 +176,7 @@ def test_build_bvff_wires_efield(tmp_path):
 def test_gamma_phonons_acoustic_and_symmetry():
     clear_neighbor_cache()
     prim = ideal_perovskite(a=3.97, rep=(1, 1, 1), A="Pb")
-    from src.calculator import BVFFCalculator
+    from bvff.core.calculator import BVFFCalculator
     calc = BVFFCalculator(_toy_bvff())
     thz, mev, n_im = gamma_phonons(prim, calc)
     assert thz.shape == (15,) and np.isfinite(thz).all()
@@ -194,7 +194,7 @@ def test_gamma_phonons_acoustic_and_symmetry():
 # ──────────────────────────────────────────────
 
 def test_scan_temperatures_smoke():
-    from src.calculator import BVFFCalculator
+    from bvff.core.calculator import BVFFCalculator
     atoms = ideal_perovskite(a=3.97, rep=(2, 2, 2), A="Pb")
     recs = scan_temperatures(
         atoms, BVFFCalculator(_toy_bvff()), temps=[50.0],

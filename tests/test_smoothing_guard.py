@@ -15,12 +15,12 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from parsers.dataset import load_dataset, DatasetEntry
-from src.potentials import (
+from bvff.parsers.dataset import load_dataset, DatasetEntry
+from bvff.core.potentials import (
     Coulomb, Repulsive, Buckingham, BV, BVV, Angle,
     _switch, clear_neighbor_cache,
 )
-from src.extensions.ewald import Ewald, ewald_alpha, clear_kvec_cache
+from bvff.core.extensions.ewald import Ewald, ewald_alpha, clear_kvec_cache
 
 
 CUTOFF = 6.0
@@ -33,11 +33,11 @@ _BUCK   = {"O-Ti": {"A": 700.0, "rho": 0.35, "C": 30.0}}
 
 
 @pytest.fixture(scope="module")
-def frame():
+def frame(pto_300k):
     clear_neighbor_cache()
     clear_kvec_cache()
     data = load_dataset(entries=[DatasetEntry(
-        path        = "examples/PbTiO3/pbtio3_222_300K.parquet",
+        path        = str(pto_300k),
         frame_start = 100, frame_end = 101, stride = 1,
     )])
     return data.frames[0]
@@ -206,7 +206,7 @@ def test_guard_no_wall_warns_and_stays_finite():
     """A ≈ 0 with C > 0 is purely attractive — no wall to cap at. The guard
     must warn (this fit cannot run MD) yet still bound the energy."""
     clear_neighbor_cache()
-    import src.potentials as P
+    import bvff.core.potentials as P
     P._BUCK_GUARD_WARNED.clear()
     with pytest.warns(UserWarning, match="no repulsive wall"):
         buck = Buckingham(params={"O-Ti": {"A": 1e-6, "rho": 0.3, "C": 50.0}},

@@ -15,4 +15,4 @@ export MKL_NUM_THREADS=1
 eval "$(/home/sbpark/archive/anaconda3/condabin/conda shell.bash hook)"
 conda activate env
 
-python3 /archive/sbpark/git/M3L/bv-ff/src/main.py 
+bvff-fit 
