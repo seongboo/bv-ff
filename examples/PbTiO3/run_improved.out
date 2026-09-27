@@ -1,0 +1,124 @@
+/archive/sbpark/git/M3L/bv-ff/parsers/controls_parser.py:264: UserWarning: use_coulomb and extensions.use_ewald are both enabled: the direct Coulomb sum is ignored — Ewald replaces it. Set use_ewald=0 to use the direct sum.
+  _validate(controls)
+16:14:32 [INFO] ────────────────────────────────────────────────────────────
+16:14:32 [INFO] BVFF started
+16:14:32 [INFO] ────────────────────────────────────────────────────────────
+16:14:32 [INFO] dataset : examples/PbTiO3/pbtio3_222_300K.parquet  (start=100, end=-1, stride=200)
+16:14:32 [INFO] dataset : examples/PbTiO3/pbtio3_222_500K.parquet  (start=100, end=-1, stride=200)
+16:14:32 [INFO] dataset : examples/PbTiO3/pbtio3_222_700K.parquet  (start=100, end=-1, stride=200)
+16:14:32 [INFO] dataset : examples/PbTiO3/pbtio3_222_800K.parquet  (start=100, end=-1, stride=200)
+16:14:32 [INFO] task    : both
+16:14:32 [INFO] ────────────────────────────────────────────────────────────
+16:14:32 [INFO] Step 1/6: Loading dataset
+16:14:32 [INFO] ────────────────────────────────────────────────────────────
+16:14:32 [INFO] Loading examples/PbTiO3/pbtio3_222_300K.parquet (format=parquet, start=100, end=-1, stride=200) ...
+16:14:32 [INFO] Parsing examples/PbTiO3/pbtio3_222_300K.parquet with pandas ...
+16:14:32 [INFO] Extracting 25 frames (start=100, end=4999, stride=200) ...
+extract frames:   4.0% (1/25) | elapsed 0.0s
+extract frames: 100.0% (25/25) | elapsed 0.0s
+16:14:32 [INFO] Extracted 25 frames from examples/PbTiO3/pbtio3_222_300K.parquet in 0.1s
+16:14:32 [INFO] Loading examples/PbTiO3/pbtio3_222_500K.parquet (format=parquet, start=100, end=-1, stride=200) ...
+16:14:32 [INFO] Parsing examples/PbTiO3/pbtio3_222_500K.parquet with pandas ...
+16:14:32 [INFO] Extracting 25 frames (start=100, end=4999, stride=200) ...
+extract frames:   4.0% (1/25) | elapsed 0.0s
+extract frames: 100.0% (25/25) | elapsed 0.0s
+16:14:32 [INFO] Extracted 25 frames from examples/PbTiO3/pbtio3_222_500K.parquet in 0.1s
+16:14:32 [INFO] Loading examples/PbTiO3/pbtio3_222_700K.parquet (format=parquet, start=100, end=-1, stride=200) ...
+16:14:32 [INFO] Parsing examples/PbTiO3/pbtio3_222_700K.parquet with pandas ...
+16:14:32 [INFO] Extracting 14 frames (start=100, end=2839, stride=200) ...
+extract frames:   7.1% (1/14) | elapsed 0.0s
+extract frames: 100.0% (14/14) | elapsed 0.0s
+16:14:32 [INFO] Extracted 14 frames from examples/PbTiO3/pbtio3_222_700K.parquet in 0.0s
+16:14:32 [INFO] Loading examples/PbTiO3/pbtio3_222_800K.parquet (format=parquet, start=100, end=-1, stride=200) ...
+16:14:32 [INFO] Parsing examples/PbTiO3/pbtio3_222_800K.parquet with pandas ...
+16:14:32 [INFO] Extracting 25 frames (start=100, end=4999, stride=200) ...
+extract frames:   4.0% (1/25) | elapsed 0.0s
+extract frames: 100.0% (25/25) | elapsed 0.0s
+16:14:32 [INFO] Extracted 25 frames from examples/PbTiO3/pbtio3_222_800K.parquet in 0.1s
+16:14:32 [INFO] Loaded 89 total frames from 4 file(s).
+16:14:32 [INFO] Loaded 89 frames | 40 atoms | species: ['Pb', 'Ti', 'O'] | 0.5s
+16:14:32 [INFO] ────────────────────────────────────────────────────────────
+16:14:32 [INFO] Step 2/6: Loading parameters
+16:14:32 [INFO] ────────────────────────────────────────────────────────────
+16:14:32 [INFO] Parameters loaded.
+16:14:32 [INFO] Train frames: 71 | Test frames: 18 (stratified per source, shuffle seed=0)
+16:14:32 [INFO]   examples/PbTiO3/pbtio3_222_300K.parquet: train=20 test=5
+16:14:32 [INFO]   examples/PbTiO3/pbtio3_222_500K.parquet: train=20 test=5
+16:14:32 [INFO]   examples/PbTiO3/pbtio3_222_700K.parquet: train=11 test=3
+16:14:32 [INFO]   examples/PbTiO3/pbtio3_222_800K.parquet: train=20 test=5
+16:14:32 [INFO] Stress data detected but use_stress=0: stress term excluded from loss.
+16:14:32 [INFO] ────────────────────────────────────────────────────────────
+16:14:32 [INFO] Step 3/6: Parameter fitting (Simulated Annealing)
+16:14:32 [INFO] ────────────────────────────────────────────────────────────
+16:14:32 [INFO] Charges held fixed at their parameters.toml values (fit_charges=0): recommended for a bond-valence FF — fitting charges against E+F is under-determined and collapses them toward zero. Seed charges should be physical (e.g. formal/Born values) and cell-neutral.
+16:14:32 [INFO] Fitting 23 parameters via 'least_squares' ...
+16:14:32 [INFO] Loss weights: w_E=1.0, w_F=1.0, w_S=1.0
+16:14:32 [INFO] Reference scales: norm_E=0.027975 eV/atom, norm_F=0.783132 eV/Å
+16:14:32 [INFO] Per-frame loss loop parallelized over n_jobs=8 (joblib) for 71 training frames.
+16:14:32 [INFO]   Computing initial loss on 71 training frames (this can take a while) ...
+initial-loss:   1.4% (1/71) | elapsed 0.0s
+initial-loss: 100.0% (71/71) | elapsed 2.0s
+16:14:34 [INFO]   Initial loss = 15.504629 (1 evaluation took 1.99s)
+16:14:34 [INFO]   Early stop: patience    = 50 evaluations without improvement
+16:14:34 [INFO] Least-squares (trust-region) refinement from the seeded start ...
+16:16:05 [INFO] Least-squares done in 90.8s | 57 residual evals | status=3 | loss=16.240351 (initial 15.504629)
+16:16:05 [INFO] Fitting completed in 92.7s | best loss = 16.240351
+16:16:05 [INFO] Best loss: 16.240351 | fitting took 92.7s
+16:16:05 [INFO] ────────────────────────────────────────────────────────────
+16:16:05 [INFO] Step 4/6: Saving fitted parameters
+16:16:05 [INFO] ────────────────────────────────────────────────────────────
+16:16:05 [INFO] Fitted parameters saved to output/fitted_parameters.toml.
+16:16:05 [INFO] Potential: Coulomb (Ewald summation, alpha=0.619 1/Å, kmax=7, cutoff=6.0 Å)
+16:16:05 [INFO] Potential: Repulsive
+16:16:05 [INFO] Potential: Bond Valence (BV, form=exp)
+16:16:05 [INFO] Potential: Bond Valence Vector (BVV, form=exp)
+16:16:05 [INFO] ────────────────────────────────────────────────────────────
+16:16:05 [INFO] Step 5/6: Computing & saving predictions
+16:16:05 [INFO] ────────────────────────────────────────────────────────────
+16:16:05 [INFO] Computing energies (train=71, test=18) ...
+train/energy:   1.4% (1/71) | elapsed 0.0s
+train/energy: 100.0% (71/71) | elapsed 0.3s
+16:16:05 [INFO]   [train/energy] done in 0.3s
+test/energy:   5.6% (1/18) | elapsed 0.0s
+test/energy: 100.0% (18/18) | elapsed 0.5s
+16:16:06 [INFO]   [test/energy] done in 0.5s
+16:16:06 [INFO] Energies saved to output.
+16:16:06 [INFO] Computing forces (train=71, test=18) ...
+train/force :   1.4% (1/71) | elapsed 0.0s
+train/force : 100.0% (71/71) | elapsed 0.4s
+16:16:06 [INFO]   [train/force] done in 0.4s
+test/force :   5.6% (1/18) | elapsed 0.0s
+test/force : 100.0% (18/18) | elapsed 0.1s
+16:16:06 [INFO]   [test/force] done in 0.1s
+16:16:06 [INFO] Forces saved to output.
+16:16:06 [INFO] Predictions saved in 1.3s
+16:16:06 [INFO] ────────────────────────────────────────────────────────────
+16:16:06 [INFO] Step 6/6: Running analysis & plots
+16:16:06 [INFO] ────────────────────────────────────────────────────────────
+16:16:06 [INFO] Running analysis ...
+16:16:06 [INFO]   Collecting predictions on 71 train ...
+analysis/train:   1.4% (1/71) | elapsed 0.0s
+analysis/train: 100.0% (71/71) | elapsed 0.6s
+16:16:07 [INFO]   [train] predictions done in 0.6s
+16:16:07 [INFO]   Collecting predictions on 18 test ...
+analysis/test:   5.6% (1/18) | elapsed 0.0s
+analysis/test: 100.0% (18/18) | elapsed 0.2s
+16:16:07 [INFO]   [test] predictions done in 0.2s
+16:16:07 [INFO]   Energy reference offset removed: 119.5579 eV/atom (energies fit up to a constant).
+16:16:07 [INFO] =============================================
+16:16:07 [INFO]   RMSE Summary
+16:16:07 [INFO] =============================================
+16:16:07 [INFO]   Energy RMSE (train) : 0.367755 eV/atom (offset-removed)
+16:16:07 [INFO]   Energy RMSE (test)  : 0.417437 eV/atom (offset-removed)
+16:16:07 [INFO]   Force  RMSE (train) : 2.423497 eV/A
+16:16:07 [INFO]   Force  RMSE (test)  : 2.471914 eV/A
+16:16:07 [INFO] =============================================
+16:16:07 [INFO] Generating parity plot ...
+16:16:07 [INFO] Parity plot saved to output/parity_plot.png.
+16:16:07 [INFO] Generating force distribution plot ...
+16:16:08 [INFO] Force distribution plot saved to output/force_distribution.png.
+16:16:08 [INFO] RMSE summary saved to output/rmse_summary.txt.
+16:16:08 [INFO] Analysis finished in 1.6s
+16:16:08 [INFO] ────────────────────────────────────────────────────────────
+16:16:08 [INFO] BVFF completed in 96.1s
+16:16:08 [INFO] ────────────────────────────────────────────────────────────

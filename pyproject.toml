@@ -1,0 +1,36 @@
+# Packaging metadata for the BVFF fitting code.
+#
+# The historical layout is kept: `src`, `parsers`, and `scripts` are top-level
+# packages (imports are `from src.potentials import ...` etc.). An editable
+# install (`pip install -e .`) makes those imports work from anywhere and
+# removes the need for the sys.path hacks in src/main.py / scripts/*.py —
+# note the generic top-level names, so install into a dedicated environment.
+
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bvff"
+version = "0.1.0"
+description = "Bond-valence force field (BV/BVV + Ewald) fitting for ferroelectrics against AIMD/DFT data"
+requires-python = ">=3.11"   # tomllib
+dependencies = [
+    "numpy",
+    "scipy",
+    "ase",
+    "joblib",
+    "tomli-w",
+]
+
+[project.optional-dependencies]
+vasp    = ["pymatgen"]           # vasprun.xml reader
+parquet = ["pandas", "pyarrow"]  # long-format AIMD parquet reader
+plot    = ["matplotlib"]         # scripts/analysis.py figures
+test    = ["pytest"]
+
+[tool.setuptools]
+packages = ["src", "src.extensions", "parsers", "scripts"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

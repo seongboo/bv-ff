@@ -1,0 +1,50 @@
+# BaTiO3 single-basin fit: polar P4mm NVT AIMD, four temperatures.
+# BaTiO3 has no cubic MD (polar-only data — see the parquet README), so this is
+# the analogue of the repo-root PbTiO3 fit: one ref_group, energies fit up to a
+# constant within it. Run from this directory:  python3 ../../src/main.py
+#
+# Each parquet holds 4000 NVT steps (2x2x2 P4mm cell, 40 atoms, with stress).
+# Skip 100 equilibration steps and sub-sample by 200 → ~20 frames/temperature,
+# ~80 total, matching the PbTiO3 working-set size.
+dataset = [
+    "/home/sbpark/archive/Calc/MD_simulation/data/parquet/BaTiO3/NVT_P4mm/bto_222_300K.parquet",
+    "/home/sbpark/archive/Calc/MD_simulation/data/parquet/BaTiO3/NVT_P4mm/bto_222_500K.parquet",
+    "/home/sbpark/archive/Calc/MD_simulation/data/parquet/BaTiO3/NVT_P4mm/bto_222_700K.parquet",
+    "/home/sbpark/archive/Calc/MD_simulation/data/parquet/BaTiO3/NVT_P4mm/bto_222_800K.parquet",
+]
+frame_start = 100
+frame_end   = -1
+stride      = 200
+
+output_dir = "./output"
+log_file   = "bvff.log"
+task       = "both"
+
+train_ratio = 0.8
+split_seed  = 0
+
+[potentials]
+use_coulomb    = 1
+use_repulsive  = 1     # r^-12 repulsion balances the reduced effective charges
+use_buckingham = 0
+use_BV         = 1
+use_BVV        = 1
+use_angle      = 0
+bv_form        = "exp" # Brown-Altermatt V_ij = exp((r0-r)/b)
+
+[extensions]
+use_ewald = 1
+# ewald_epsilon defaults to inf (tinfoil) — correct for a bulk ferroelectric.
+
+[fitting]
+optimizer   = "least_squares"
+fit_charges = 0        # reduced effective charges held fixed (BVFF convention)
+w_E         = 1.0
+w_F         = 1.0
+w_S         = 1.0
+use_stress  = 0
+polish      = 1
+target_loss = 0.0
+patience    = 50
+maxiter     = 1000
+n_jobs      = 8

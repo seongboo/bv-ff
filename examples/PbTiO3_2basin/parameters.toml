@@ -1,0 +1,74 @@
+# PbTiO3 two-basin fit — fixed REDUCED effective charges + soft Buckingham.
+# Charges held fixed (controls fit_charges=0). Reduced effective charges
+# (cell-neutral: 8·1.4 + 8·1.0 − 24·0.8 = 0), NOT formal ±2/±4/±2: in PbTiO3
+# AIMD the local forces carry little full-ionic-Coulomb character (a free-charge
+# fit collapses charges → ~0 to reach 0.4 eV/Å; formal charges give a ~27000 eV
+# Coulomb and ~9 eV/Å forces). Reduced charges are the standard rigid-ion
+# compromise: enough long-range Coulomb to couple the ferroelectric mode without
+# wrecking the local force fit. Buckingham provides the soft repulsion.
+cutoff = 6.0
+
+[coulomb]
+Pb =  1.4
+Ti =  1.0
+O  = -0.8
+
+[buckingham.O-O]
+A   = 22764.3
+rho = 0.149
+C   = 27.88
+
+[buckingham.O-Ti]
+A   = 877.2
+rho = 0.381
+C   = 9.0
+
+[buckingham.O-Pb]
+A   = 5000.0
+rho = 0.35
+C   = 0.0
+
+[BV.species.Pb]
+V0 = 2.0
+S  = 0.5
+
+[BV.species.Ti]
+V0 = 4.0
+S  = 0.5
+
+[BV.species.O]
+V0 = 2.0
+S  = 0.5
+
+# Brown-Altermatt exp form: V_ij = exp((r0 - r)/b), b ≈ 0.37 Å.
+[BV.pairs.O-Pb]
+r0 = 2.112
+C  = 6.0
+b  = 0.37
+
+[BV.pairs.O-Ti]
+r0 = 1.815
+C  = 5.2
+b  = 0.37
+
+[BVV.Pb]
+W0 = 0.5
+D  = 0.1
+
+[BVV.Ti]
+W0 = 0.3
+D  = 0.1
+
+[BVV.O]
+W0 = 0.0
+D  = 0.0
+
+[BVV.pairs.O-Pb]
+r0 = 2.112
+C  = 6.0
+b  = 0.37
+
+[BVV.pairs.O-Ti]
+r0 = 1.815
+C  = 5.2
+b  = 0.37

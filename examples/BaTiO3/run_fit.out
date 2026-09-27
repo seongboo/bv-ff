@@ -1,0 +1,117 @@
+/archive/sbpark/git/M3L/bv-ff/parsers/controls_parser.py:309: UserWarning: use_coulomb and extensions.use_ewald are both enabled: the direct Coulomb sum is ignored — Ewald replaces it. Set use_ewald=0 to use the direct sum.
+  _validate(controls)
+19:48:08 [INFO] ────────────────────────────────────────────────────────────
+19:48:08 [INFO] BVFF started
+19:48:08 [INFO] ────────────────────────────────────────────────────────────
+19:48:08 [INFO] dataset : /home/sbpark/archive/Calc/MD_simulation/data/parquet/BaTiO3/NVT_P4mm/bto_222_300K.parquet  (start=100, end=-1, stride=200)
+19:48:08 [INFO] dataset : /home/sbpark/archive/Calc/MD_simulation/data/parquet/BaTiO3/NVT_P4mm/bto_222_500K.parquet  (start=100, end=-1, stride=200)
+19:48:08 [INFO] dataset : /home/sbpark/archive/Calc/MD_simulation/data/parquet/BaTiO3/NVT_P4mm/bto_222_700K.parquet  (start=100, end=-1, stride=200)
+19:48:08 [INFO] dataset : /home/sbpark/archive/Calc/MD_simulation/data/parquet/BaTiO3/NVT_P4mm/bto_222_800K.parquet  (start=100, end=-1, stride=200)
+19:48:08 [INFO] task    : both
+19:48:08 [INFO] ────────────────────────────────────────────────────────────
+19:48:08 [INFO] Step 1/6: Loading dataset
+19:48:08 [INFO] ────────────────────────────────────────────────────────────
+19:48:08 [INFO] Loading /home/sbpark/archive/Calc/MD_simulation/data/parquet/BaTiO3/NVT_P4mm/bto_222_300K.parquet (format=parquet, start=100, end=-1, stride=200) ...
+19:48:09 [INFO] Parsing /home/sbpark/archive/Calc/MD_simulation/data/parquet/BaTiO3/NVT_P4mm/bto_222_300K.parquet with pandas ...
+19:48:09 [INFO] Extracting 20 frames (start=100, end=3999, stride=200) ...
+extract frames:   5.0% (1/20) | elapsed 0.0s
+extract frames: 100.0% (20/20) | elapsed 0.0s
+19:48:09 [INFO] Extracted 20 frames from /home/sbpark/archive/Calc/MD_simulation/data/parquet/BaTiO3/NVT_P4mm/bto_222_300K.parquet in 0.1s
+19:48:09 [INFO] Loading /home/sbpark/archive/Calc/MD_simulation/data/parquet/BaTiO3/NVT_P4mm/bto_222_500K.parquet (format=parquet, start=100, end=-1, stride=200) ...
+19:48:09 [INFO] Parsing /home/sbpark/archive/Calc/MD_simulation/data/parquet/BaTiO3/NVT_P4mm/bto_222_500K.parquet with pandas ...
+19:48:09 [INFO] Extracting 20 frames (start=100, end=3999, stride=200) ...
+extract frames:   5.0% (1/20) | elapsed 0.0s
+extract frames: 100.0% (20/20) | elapsed 0.0s
+19:48:09 [INFO] Extracted 20 frames from /home/sbpark/archive/Calc/MD_simulation/data/parquet/BaTiO3/NVT_P4mm/bto_222_500K.parquet in 0.2s
+19:48:09 [INFO] Loading /home/sbpark/archive/Calc/MD_simulation/data/parquet/BaTiO3/NVT_P4mm/bto_222_700K.parquet (format=parquet, start=100, end=-1, stride=200) ...
+19:48:09 [INFO] Parsing /home/sbpark/archive/Calc/MD_simulation/data/parquet/BaTiO3/NVT_P4mm/bto_222_700K.parquet with pandas ...
+19:48:09 [INFO] Extracting 20 frames (start=100, end=3999, stride=200) ...
+extract frames:   5.0% (1/20) | elapsed 0.0s
+extract frames: 100.0% (20/20) | elapsed 0.0s
+19:48:09 [INFO] Extracted 20 frames from /home/sbpark/archive/Calc/MD_simulation/data/parquet/BaTiO3/NVT_P4mm/bto_222_700K.parquet in 0.1s
+19:48:09 [INFO] Loading /home/sbpark/archive/Calc/MD_simulation/data/parquet/BaTiO3/NVT_P4mm/bto_222_800K.parquet (format=parquet, start=100, end=-1, stride=200) ...
+19:48:09 [INFO] Parsing /home/sbpark/archive/Calc/MD_simulation/data/parquet/BaTiO3/NVT_P4mm/bto_222_800K.parquet with pandas ...
+19:48:09 [INFO] Extracting 20 frames (start=100, end=3999, stride=200) ...
+extract frames:   5.0% (1/20) | elapsed 0.0s
+extract frames: 100.0% (20/20) | elapsed 0.0s
+19:48:09 [INFO] Extracted 20 frames from /home/sbpark/archive/Calc/MD_simulation/data/parquet/BaTiO3/NVT_P4mm/bto_222_800K.parquet in 0.0s
+19:48:09 [INFO] Loaded 80 total frames from 4 file(s).
+19:48:09 [INFO] Loaded 80 frames | 40 atoms | species: ['Ba', 'Ti', 'O'] | 0.6s
+19:48:09 [INFO] ────────────────────────────────────────────────────────────
+19:48:09 [INFO] Step 2/6: Loading parameters
+19:48:09 [INFO] ────────────────────────────────────────────────────────────
+19:48:09 [INFO] Parameters loaded.
+19:48:09 [INFO] Train frames: 64 | Test frames: 16 (stratified per source, shuffle seed=0)
+19:48:09 [INFO]   /home/sbpark/archive/Calc/MD_simulation/data/parquet/BaTiO3/NVT_P4mm/bto_222_300K.parquet: train=16 test=4
+19:48:09 [INFO]   /home/sbpark/archive/Calc/MD_simulation/data/parquet/BaTiO3/NVT_P4mm/bto_222_500K.parquet: train=16 test=4
+19:48:09 [INFO]   /home/sbpark/archive/Calc/MD_simulation/data/parquet/BaTiO3/NVT_P4mm/bto_222_700K.parquet: train=16 test=4
+19:48:09 [INFO]   /home/sbpark/archive/Calc/MD_simulation/data/parquet/BaTiO3/NVT_P4mm/bto_222_800K.parquet: train=16 test=4
+19:48:09 [INFO] Stress data detected but use_stress=0: stress term excluded from loss.
+19:48:09 [INFO] ────────────────────────────────────────────────────────────
+19:48:09 [INFO] Step 3/6: Parameter fitting (Simulated Annealing)
+19:48:09 [INFO] ────────────────────────────────────────────────────────────
+19:48:09 [INFO] Charges held fixed at their parameters.toml values (fit_charges=0): recommended for a bond-valence FF — fitting charges against E+F is under-determined and collapses them toward zero. Seed charges should be physical (e.g. formal/Born values) and cell-neutral.
+19:48:09 [INFO] Fitting 23 parameters via 'least_squares' ...
+19:48:09 [INFO] Loss weights: w_E=1.0, w_F=1.0, w_S=1.0
+19:48:09 [INFO] Reference scales: norm_E=0.027181 eV/atom, norm_F=0.781390 eV/Å, norm_S=0.00906949 eV/Å³
+19:48:09 [INFO] Per-frame loss loop parallelized over n_jobs=8 (joblib) for 64 training frames.
+19:48:09 [INFO]   Computing initial loss on 64 training frames (this can take a while) ...
+initial-loss:   1.6% (1/64) | elapsed 0.0s
+initial-loss: 100.0% (64/64) | elapsed 1.7s
+19:48:11 [INFO]   Initial loss = 1.353236 (1 evaluation took 1.68s)
+19:48:11 [INFO]   Early stop: patience    = 50 evaluations without improvement
+19:48:11 [WARNING] optimizer='least_squares' fits energy+forces only; the stress term is excluded from the residual even though some frames carry stress (use optimizer='anneal' to include stress in the loss).
+19:48:11 [INFO] Least-squares (trust-region) refinement from the seeded start ...
+19:51:09 [INFO] Least-squares done in 178.5s | 117 residual evals | status=2 | loss=0.731097 (initial 1.353236)
+19:51:09 [INFO] Fitting completed in 180.1s | best loss = 0.731097
+19:51:09 [INFO] Best loss: 0.731097 | fitting took 180.1s
+19:51:09 [INFO] ────────────────────────────────────────────────────────────
+19:51:09 [INFO] Step 4/6: Saving fitted parameters
+19:51:09 [INFO] ────────────────────────────────────────────────────────────
+19:51:09 [INFO] Fitted parameters saved to output/fitted_parameters.toml.
+19:51:09 [INFO] Potential: Coulomb (Ewald summation, alpha=0.619 1/Å, kmax=auto per lattice, cutoff=6.0 Å, surface epsilon=inf (tinfoil))
+19:51:09 [INFO] Potential: Repulsive
+19:51:09 [INFO] Potential: Bond Valence (BV, form=exp)
+19:51:09 [INFO] Potential: Bond Valence Vector (BVV, form=exp)
+19:51:09 [INFO] ────────────────────────────────────────────────────────────
+19:51:09 [INFO] Step 5/6: Computing & saving predictions
+19:51:09 [INFO] ────────────────────────────────────────────────────────────
+19:51:09 [INFO] Computing energies+forces (train=64, test=16) ...
+train/both  :   1.6% (1/64) | elapsed 0.0s
+train/both  : 100.0% (64/64) | elapsed 0.3s
+19:51:09 [INFO]   [train/both] done in 0.3s
+test/both  :   6.2% (1/16) | elapsed 0.0s
+test/both  : 100.0% (16/16) | elapsed 0.4s
+19:51:10 [INFO]   [test/both] done in 0.4s
+19:51:10 [INFO] Energies and forces saved to output.
+19:51:10 [INFO] Predictions saved in 0.7s
+19:51:10 [INFO] ────────────────────────────────────────────────────────────
+19:51:10 [INFO] Step 6/6: Running analysis & plots
+19:51:10 [INFO] ────────────────────────────────────────────────────────────
+19:51:10 [INFO] Running analysis ...
+19:51:10 [INFO]   Collecting predictions on 64 train ...
+analysis/train:   1.6% (1/64) | elapsed 0.0s
+analysis/train: 100.0% (64/64) | elapsed 0.3s
+19:51:10 [INFO]   [train] predictions done in 0.3s
+19:51:10 [INFO]   Collecting predictions on 16 test ...
+analysis/test:   6.2% (1/16) | elapsed 0.0s
+analysis/test: 100.0% (16/16) | elapsed 0.1s
+19:51:10 [INFO]   [test] predictions done in 0.1s
+19:51:10 [INFO]   Energy reference offset removed: 5.3036 eV/atom (fit up to a constant).
+19:51:10 [INFO] =============================================
+19:51:10 [INFO]   RMSE Summary
+19:51:10 [INFO] =============================================
+19:51:10 [INFO]   Energy RMSE (train) : 0.007366 eV/atom (offset-removed)
+19:51:10 [INFO]   Energy RMSE (test)  : 0.007893 eV/atom (offset-removed)
+19:51:10 [INFO]   Force  RMSE (train) : 0.359514 eV/A
+19:51:10 [INFO]   Force  RMSE (test)  : 0.355174 eV/A
+19:51:10 [INFO] =============================================
+19:51:10 [INFO] Generating parity plot ...
+19:51:24 [INFO] Parity plot saved to output/parity_plot.png.
+19:51:24 [INFO] Generating force distribution plot ...
+19:51:35 [INFO] Force distribution plot saved to output/force_distribution.png.
+19:51:35 [INFO] RMSE summary saved to output/rmse_summary.txt.
+19:51:35 [INFO] Analysis finished in 25.6s
+19:51:35 [INFO] ────────────────────────────────────────────────────────────
+19:51:35 [INFO] BVFF completed in 207.0s
+19:51:35 [INFO] ────────────────────────────────────────────────────────────

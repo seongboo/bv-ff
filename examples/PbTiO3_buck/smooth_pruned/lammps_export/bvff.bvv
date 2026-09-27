@@ -1,0 +1,10 @@
+# BVV parameters for pair_style bvv (see lammps_plugin/)
+cutoff        6.0
+smooth_width  1.0
+form          exp
+species       2
+Pb  1.574286688903071  0.1892829109849758
+Ti  0.2811324185924753  0.09833728218241038
+pairs         2
+O Pb  2.067504550665565 6 0.4919741034157477
+O Ti  1.760375679728824 5.2 0.3856403959104821

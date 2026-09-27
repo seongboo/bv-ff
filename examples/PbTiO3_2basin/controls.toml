@@ -1,0 +1,67 @@
+# PbTiO3 two-basin fit: polar P4mm (Γ-only) + cubic (4×4×4) MD.
+# The two runs use different k-meshes → different energy references, so they are
+# put in separate ref_groups (one energy offset removed per group; within-group
+# energetics fit). This gives the FF both basins' geometries/forces. Run from
+# this directory:  python3 ../../src/main.py
+#
+# Dataset entries carry per-entry ref_group + channel weights. The cubic basin's
+# forces are down-weighted (weight_F=0.3) since the polar phase is the target;
+# both basins' energetics are weighted equally (weight_E=1 each → count-norm
+# splits the energy loss ~50/50 between basins).
+frame_start = 100
+frame_end   = -1
+stride      = 200
+
+[[dataset]]
+path = "/home/sbpark/archive/Calc/MD_simulation/data/parquet/PbTiO3/NVT_P4mm/pto_222_300K.parquet"
+ref_group = "pto_polar"
+
+[[dataset]]
+path = "/home/sbpark/archive/Calc/MD_simulation/data/parquet/PbTiO3/NVT_P4mm/pto_222_500K.parquet"
+ref_group = "pto_polar"
+
+[[dataset]]
+path = "/home/sbpark/archive/Calc/MD_simulation/data/parquet/PbTiO3/NVT_P4mm/pto_222_700K.parquet"
+ref_group = "pto_polar"
+
+[[dataset]]
+path = "/home/sbpark/archive/Calc/MD_simulation/data/parquet/PbTiO3/NVT_P4mm/pto_222_800K.parquet"
+ref_group = "pto_polar"
+
+[[dataset]]
+path        = "/home/sbpark/archive/Calc/MD_simulation/data/parquet/PbTiO3/NVT_cubic/pto_222_cubic.parquet"
+ref_group   = "pto_cubic"
+frame_start = 50
+stride      = 50
+weight_E    = 1.0
+weight_F    = 0.3
+
+output_dir = "./output"
+log_file   = "bvff.log"
+task       = "both"
+train_ratio = 0.8
+split_seed  = 0
+
+[potentials]
+use_coulomb    = 1
+use_repulsive  = 0      # r^-12 cannot balance formal-charge Coulomb
+use_buckingham = 1      # soft Born-Mayer repulsion (canonical for formal charges)
+use_BV         = 1
+use_BVV        = 1
+use_angle      = 0
+bv_form        = "exp"
+
+[extensions]
+use_ewald = 1
+
+[fitting]
+optimizer            = "least_squares"
+fit_charges          = 0          # formal charges held fixed
+weight_normalization = "count"
+lambda_reg           = 1e-3       # mild Tikhonov toward the physical seed
+w_E         = 1.0
+w_F         = 1.0
+w_S         = 1.0
+use_stress  = 0
+maxiter     = 300
+n_jobs      = 8

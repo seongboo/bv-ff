@@ -1,0 +1,17 @@
+# M3L BVFF — exported potential (single point; extend for MD)
+units metal
+atom_style charge
+boundary p p p
+read_data bench_2.data
+plugin load /archive/sbpark/git/M3L/bv-ff/lammps_plugin/bvvplugin.so
+pair_style hybrid/overlay eam/fs coul/long 6.0 bvv
+pair_coeff * * eam/fs bvff.eam.fs O Pb Ti
+pair_coeff * * coul/long
+pair_coeff * * bvv bvff.bvv O Pb Ti
+kspace_style ewald 1.0e-6
+neighbor 1.0 bin
+thermo_style custom step temp pe ke etotal press
+velocity all create 300.0 1 dist gaussian
+fix 1 all nve
+timestep 0.002
+run 50

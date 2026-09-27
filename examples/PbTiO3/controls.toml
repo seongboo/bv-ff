@@ -1,0 +1,109 @@
+# Input dataset. Format auto-detected by extension:
+#   *.xml            → VASP vasprun
+#   *.xyz/.extxyz    → extxyz (ASE)
+#   *.parquet/.pq    → long-format AIMD table (see scripts/vasprun2data.py;
+#                      must carry Lattice_* columns — BVFF needs a cell)
+#
+# Accepted forms (all collapse to a list of (path, frame_start, frame_end, stride)):
+#
+#   # 1) single file, window from top-level frame_start/end/stride
+#   dataset = "examples/PbTiO3/vasprun.xml"
+#
+#   # 2) list of files, same top-level window applied to each
+#   dataset = ["data/300K.extxyz", "data/600K.extxyz"]
+#
+#   # 3) per-file window override (table array form)
+#   [[dataset]]
+#   path        = "data/300K.extxyz"
+#   frame_start = 100
+#   stride      = 10
+#
+#   [[dataset]]
+#   path        = "data/900K.extxyz"
+#   frame_start = 200       # different window for hotter run
+#   frame_end   = 800
+#   stride      = 20
+dataset = [
+    "pbtio3_222_300K.parquet",
+    "pbtio3_222_500K.parquet",
+    "pbtio3_222_700K.parquet",
+    "pbtio3_222_800K.parquet",
+]
+
+# Default frame selection (used when a [[dataset]] entry doesn't override).
+# Each parquet holds ~5000 AIMD steps (700K: 2840). Skip ~100 equilibration
+# steps and sub-sample by 200 → ~90 frames total, balanced across the four
+# temperatures (matches the working set size used in prior fits).
+frame_start = 100
+frame_end   = -1
+stride      = 200
+
+# Output
+output_dir = "./output"
+log_file   = "bvff.log"
+
+# Task
+task = "both"           # energy / force / both
+
+# Train/test split.
+# The split is stratified by source file: every trajectory (temperature) is
+# split train_ratio / (1 - train_ratio), so each temperature is represented in
+# both sets. Frames within each file are shuffled by split_seed before the cut,
+# giving an iid-within-temperature test set that is reproducible run-to-run.
+train_ratio = 0.8
+split_seed  = 0
+
+[potentials]
+use_coulomb    = 1
+use_repulsive  = 1     # Lennard-Jones-style r^-12 repulsion
+use_buckingham = 0     # Born-Mayer A*exp(-r/rho) - C/r^6 (alternative to repulsive)
+use_BV         = 1
+use_BVV        = 1
+use_angle      = 0
+# Bond-valence functional form (applies to BV and BVV):
+#   "power" → V_ij = (r0/r)^C        (fits r0, C)
+#   "exp"   → V_ij = exp((r0-r)/b)   (fits r0, b; Brown-Altermatt)
+bv_form        = "power"
+
+[extensions]
+use_ewald = 1
+
+[fitting]
+# RMSE_E (~0.09 eV/atom) and RMSE_F (~1.4 eV/A) live on very different scales,
+# so w_E=w_F=1 let the force term dominate the loss ~15:1 and the energy parity
+# came out uncorrelated. Bump w_E so energy contributes comparably to the loss.
+w_E         = 20.0
+w_F         = 1.0
+w_S         = 1.0
+# use_stress: include the virial stress term in the loss. Needs stress in the
+# dataset (this PbTiO3 NVT run has none) and adds up to ~18 energy evals/frame
+# for terms without a closed-form virial (Ewald, BV, BVV, Angle) → off by default.
+use_stress  = 0
+# polish: after simulated annealing, run an L-BFGS-B local refinement from the
+# global best and keep whichever loss is lower (cheap; can only help).
+polish      = 1
+# Early-stop controls (both off by default):
+#   target_loss > 0 → stop once best loss drops below it
+#   patience    > 0 → stop after N consecutive evaluations without improvement
+# target_loss = 0.05 was below the practical floor for this system (the
+# smoke fit plateau'd near ~2.7 with the pre-fix forces) so it never fired.
+# Disable target-based exit; rely on patience + maxiter. Re-enable once a
+# realistic achievable loss is known from a clean baseline run.
+# n_jobs: joblib process budget (1=serial, -1=all cores). Spent on one parallel
+# level at a time so cores aren't oversubscribed. Pair with OMP_NUM_THREADS=1 in
+# run.sh to keep each worker's BLAS single-threaded.
+n_jobs      = -1
+# n_starts: independent dual_annealing runs (different seeds) forming a
+# multi-start ensemble; the best is kept. With n_starts > 1 the runs are
+# parallelized over n_jobs (each run's frame loop is serial), which both uses the
+# 64-core node fully and escapes shallow basins far more reliably than one long
+# run — directly targeting the placeholder-trapped parameters seen before.
+# 16 starts on a 64-core node leaves room for the polish gradient afterwards.
+n_starts    = 1
+target_loss = 0.0
+# patience=50 was too aggressive: dual_annealing early-stopped on every run with
+# many parameters still sitting at their placeholders (repulsive B~1.0, BVV W0~0,
+# BV S=0, Pb charge=0), i.e. trapped in a shallow basin. Give the global search
+# more room to escape it.
+patience    = 300
+maxiter     = 2000

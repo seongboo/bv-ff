@@ -1,0 +1,111 @@
+# Input dataset. Format auto-detected by extension:
+#   *.xml            → VASP vasprun
+#   *.xyz/.extxyz    → extxyz (ASE)
+#   *.parquet/.pq    → long-format AIMD table (see scripts/vasprun2data.py;
+#                      must carry Lattice_* columns — BVFF needs a cell)
+#
+# Accepted forms (all collapse to a list of (path, frame_start, frame_end, stride)):
+#
+#   # 1) single file, window from top-level frame_start/end/stride
+#   dataset = "examples/PbTiO3/vasprun.xml"
+#
+#   # 2) list of files, same top-level window applied to each
+#   dataset = ["data/300K.extxyz", "data/600K.extxyz"]
+#
+#   # 3) per-file window override (table array form)
+#   [[dataset]]
+#   path        = "data/300K.extxyz"
+#   frame_start = 100
+#   stride      = 10
+#
+#   [[dataset]]
+#   path        = "data/900K.extxyz"
+#   frame_start = 200       # different window for hotter run
+#   frame_end   = 800
+#   stride      = 20
+dataset = [
+    "examples/PbTiO3/pbtio3_222_300K.parquet",
+    "examples/PbTiO3/pbtio3_222_500K.parquet",
+    "examples/PbTiO3/pbtio3_222_700K.parquet",
+    "examples/PbTiO3/pbtio3_222_800K.parquet",
+]
+
+# Default frame selection (used when a [[dataset]] entry doesn't override).
+# Each parquet holds ~5000 AIMD steps (700K: 2840). Skip ~100 equilibration
+# steps and sub-sample by 200 → ~90 frames total, balanced across the four
+# temperatures (matches the working set size used in prior fits).
+frame_start = 100
+frame_end   = -1
+stride      = 200
+
+# Output
+output_dir = "./output"
+log_file   = "bvff.log"
+
+# Task
+task = "both"           # energy / force / both
+
+# Train/test split.
+# The split is stratified by source file: every trajectory (temperature) is
+# split train_ratio / (1 - train_ratio), so each temperature is represented in
+# both sets. Frames within each file are shuffled by split_seed before the cut,
+# giving an iid-within-temperature test set that is reproducible run-to-run.
+train_ratio = 0.8
+split_seed  = 0
+
+[potentials]
+use_coulomb    = 1
+use_repulsive  = 1     # Lennard-Jones-style r^-12 repulsion
+use_buckingham = 0     # Born-Mayer A*exp(-r/rho) - C/r^6 (alternative to repulsive)
+use_BV         = 1
+use_BVV        = 1
+use_angle      = 0
+# Bond-valence functional form (applies to BV and BVV):
+#   "power" → V_ij = (r0/r)^C        (fits r0, C)
+#   "exp"   → V_ij = exp((r0-r)/b)   (fits r0, b; Brown-Altermatt)
+# "exp" is the canonical Brown-Altermatt form (b ≈ 0.37 Å is near-universal and
+# the tabulated R0 values are exp-form) — the form used by the Rappe-group
+# ferroelectric bond-valence potentials, so it is the default seed here.
+bv_form        = "exp"
+
+[extensions]
+use_ewald = 1
+
+[fitting]
+# optimizer: how the parameters are fit.
+#   "least_squares" (default) → seeded trust-region (scipy least_squares). Starts
+#                    from the parameters.toml values and refines locally. Best
+#                    when a physically sensible seed exists (the usual case).
+#   "anneal"        → global dual_annealing (+ optional L-BFGS-B polish). Use to
+#                    fit from scratch (placeholder params) with no usable seed.
+optimizer   = "least_squares"
+# fit_charges: fit the Coulomb charges (1) or hold them fixed at the
+# parameters.toml values (0, recommended). Fitting charges against E+F alone is
+# under-determined for a bond-valence FF (Coulomb is degenerate with the
+# repulsion/BV terms), so a free fit collapses charges toward zero and the
+# potential loses its ferroelectric driving force. Keep them at physical,
+# cell-neutral formal/Born values.
+fit_charges = 0
+w_E         = 1.0
+w_F         = 1.0
+w_S         = 1.0
+# use_stress: include the virial stress term in the loss. Needs stress in the
+# dataset (this PbTiO3 NVT run has none) and adds up to ~18 energy evals/frame
+# for terms without a closed-form virial (Ewald, BV, BVV, Angle) → off by default.
+use_stress  = 0
+# polish: after simulated annealing, run an L-BFGS-B local refinement from the
+# global best and keep whichever loss is lower (cheap; can only help).
+polish      = 1
+# Early-stop controls (both off by default):
+#   target_loss > 0 → stop once best loss drops below it
+#   patience    > 0 → stop after N consecutive evaluations without improvement
+# target_loss = 0.05 was below the practical floor for this system (the
+# smoke fit plateau'd near ~2.7 with the pre-fix forces) so it never fired.
+# Disable target-based exit; rely on patience + maxiter. Re-enable once a
+# realistic achievable loss is known from a clean baseline run.
+target_loss = 0.0
+patience    = 50
+maxiter     = 1000
+# joblib process budget (1=serial, -1=all cores). With optimizer="least_squares"
+# this parallelizes the per-frame loop inside each residual/Jacobian evaluation.
+n_jobs      = 8

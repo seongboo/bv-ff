@@ -1,0 +1,30 @@
+# Python bytecode
+__pycache__/
+*.pyc
+*.pyo
+
+# OS / editor cruft
+.DS_Store
+*.swp
+
+# Fitting outputs / logs
+output/
+*.log
+
+# Auto-generated parameters / artifacts
+/tmp/parameters.toml
+
+# Test / tool caches
+.pytest_cache/
+.code-review-graph/
+
+# Run logs
+run.out
+slurm-*.out
+run_refit.out
+
+# Large AIMD datasets (kept locally, not versioned)
+*.parquet
+
+# Local Claude Code settings
+.claude/settings.local.json

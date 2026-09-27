@@ -1,0 +1,11 @@
+/archive/sbpark/git/M3L/bv-ff/parsers/controls_parser.py:369: UserWarning: use_coulomb and extensions.use_ewald are both enabled: the direct Coulomb sum is ignored — Ewald replaces it. Set use_ewald=0 to use the direct sum.
+  _validate(controls)
+Start: 40 atoms | |u0| = 0.381 Å | NVT | temps = [100.0, 300.0, 500.0, 700.0, 900.0, 1100.0]
+  T=   100 K | <|u|> = 0.337 ± 0.012 Å | <u_z> = -0.335 Å
+  T=   300 K | <|u|> = 0.295 ± 0.027 Å | <u_z> = -0.291 Å
+  T=   500 K | <|u|> = 0.171 ± 0.077 Å | <u_z> = -0.034 Å
+  T=   700 K | <|u|> = 0.170 ± 0.065 Å | <u_z> = +0.073 Å
+  T=   900 K | <|u|> = 0.150 ± 0.073 Å | <u_z> = +0.016 Å
+  T=  1100 K | <|u|> = 0.131 ± 0.052 Å | <u_z> = +0.004 Å
+Tc bracket (|<u_z>| half-collapse): ~500 K
+Wrote output/tc_scan.csv

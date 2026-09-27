@@ -1,0 +1,66 @@
+# BaTiO3 initial parameters — structured like the PbTiO3 seed (../../parameters.toml).
+# Reduced effective rigid-ion charges, cell-neutral:
+#   8*(+1.4) + 8*(+1.0) + 24*(-0.8) = 0.
+# Charges are FIXED during the fit (fit_charges=0).
+# BV r0 are the Brown-Altermatt / Brese-O'Keeffe bond-valence parameters:
+#   Ba(2+)-O: r0 = 2.285 Å,  Ti(4+)-O: r0 = 1.815 Å,  b = 0.37 Å.
+# BVV seeds: Ba has no stereochemically active lone pair (unlike Pb), so its
+# target |W| starts near zero; Ti's BVV drives the B-site off-centering.
+cutoff = 6.0
+
+[coulomb]
+Ba =  1.4
+Ti =  1.0
+O  = -0.8
+
+[repulsive]
+O-O  = 1.83
+O-Ba = 2.17
+O-Ti = 1.28
+
+[BV.species.Ba]
+V0 = 2.0
+S  = 0.5
+
+[BV.species.Ti]
+V0 = 4.0
+S  = 0.5
+
+[BV.species.O]
+V0 = 2.0
+S  = 0.5
+
+[BV.pairs.O-Ba]
+r0 = 2.285
+C  = 7.0
+b  = 0.37
+
+[BV.pairs.O-Ti]
+r0 = 1.815
+C  = 5.2
+b  = 0.37
+
+[BVV.Ba]
+W0 = 0.1
+D  = 0.1
+
+[BVV.Ti]
+W0 = 0.3
+D  = 0.1
+
+[BVV.O]
+W0 = 0.0
+D  = 0.0
+
+[BVV.pairs.O-Ba]
+r0 = 2.285
+C  = 7.0
+b  = 0.37
+
+[BVV.pairs.O-Ti]
+r0 = 1.815
+C  = 5.2
+b  = 0.37
+
+[angle]
+k = 1.0

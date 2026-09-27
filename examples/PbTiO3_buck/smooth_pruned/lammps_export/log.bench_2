@@ -1,0 +1,86 @@
+LAMMPS (30 Mar 2026 - Development - 3bfc12b-modified)
+# M3L BVFF — exported potential (single point; extend for MD)
+units metal
+atom_style charge
+boundary p p p
+read_data bench_2.data
+Reading data file ...
+  orthogonal box = (0 0 0) to (7.9553933 7.9553933 7.9553933)
+  1 by 1 by 1 MPI processor grid
+  reading atoms ...
+  40 atoms
+  read_data CPU = 0.000 seconds
+plugin load /archive/sbpark/git/M3L/bv-ff/lammps_plugin/bvvplugin.so
+Loading plugin: bond-valence vector (BVV) pair style for the M3L BVFF v1.0 by M3L bv-ff (seongboo)
+pair_style hybrid/overlay eam/fs coul/long 6.0 bvv
+pair_coeff * * eam/fs bvff.eam.fs O Pb Ti
+pair_coeff * * coul/long
+pair_coeff * * bvv bvff.bvv O Pb Ti
+kspace_style ewald 1.0e-6
+neighbor 1.0 bin
+thermo_style custom step temp pe ke etotal press
+velocity all create 300.0 1 dist gaussian
+fix 1 all nve
+timestep 0.002
+run 50
+Ewald initialization ...
+  using 12-bit tables for long-range coulomb
+  G vector (1/distance) = 0.58504867
+  estimated absolute RMS force accuracy = 1.4680001e-05
+  estimated relative force accuracy = 1.0194696e-06
+  KSpace vectors: actual max1d max3d = 462 6 1098
+                  kxmax kymax kzmax  = 6 6 6
+Neighbor list info ...
+  update: every = 1 steps, delay = 0 steps, check = yes
+  max neighbors/atom: 2000, page size: 100000
+  master list distance cutoff = 7
+  ghost atom cutoff = 7
+  binsize = 3.5, bins = 3 3 3
+  3 neighbor lists, perpetual/occasional/extra = 3 0 0
+  (1) pair eam/fs, perpetual
+      attributes: half, newton on
+      pair build: half/bin/atomonly/newton
+      stencil: half/bin/3d
+      bin: standard
+  (2) pair coul/long, perpetual, copy from (1)
+      attributes: half, newton on
+      pair build: copy
+      stencil: none
+      bin: none
+  (3) pair bvv, perpetual, copy from (1)
+      attributes: half, newton on
+      pair build: copy
+      stencil: none
+      bin: none
+Per MPI rank memory allocation (min/avg/max) = 14.49 | 14.49 | 14.49 Mbytes
+   Step          Temp          PotEng         KinEng         TotEng         Press     
+         0   300           -179.14937      1.5123437     -177.63703     -26647.346    
+        50   271.3382      -179.00307      1.3678554     -177.63521      27065.083    
+Loop time of 0.0157905 on 1 procs for 50 steps with 40 atoms
+
+Performance: 547.165 ns/day, 0.044 hours/ns, 3166.462 timesteps/s, 126.658 katom-step/s
+100.0% CPU use with 1 MPI tasks x no OpenMP threads
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Pair    | 0.0084634  | 0.0084634  | 0.0084634  |   0.0 | 53.60
+Kspace  | 0.0070813  | 0.0070813  | 0.0070813  |   0.0 | 44.85
+Neigh   | 0          | 0          | 0          |   0.0 |  0.00
+Comm    | 0.00016106 | 0.00016106 | 0.00016106 |   0.0 |  1.02
+Output  | 1.0899e-05 | 1.0899e-05 | 1.0899e-05 |   0.0 |  0.07
+Modify  | 3.2102e-05 | 3.2102e-05 | 3.2102e-05 |   0.0 |  0.20
+Other   |            | 4.175e-05  |            |       |  0.26
+
+Nlocal:             40 ave          40 max          40 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Nghost:            841 ave         841 max         841 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Neighs:           2216 ave        2216 max        2216 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+
+Total # of neighbors = 2216
+Ave neighs/atom = 55.4
+Neighbor list builds = 0
+Dangerous builds = 0
+Total wall time: 0:00:00

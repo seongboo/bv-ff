@@ -1,0 +1,46 @@
+# PbTiO3 Buckingham refit — lambda_reg scan point lam=1e-1 (Phase 0).
+# Block split (honest holdout), exp BV form, frozen charges, log-space fit.
+dataset = [
+    "../../PbTiO3/pbtio3_222_300K.parquet",
+    "../../PbTiO3/pbtio3_222_500K.parquet",
+    "../../PbTiO3/pbtio3_222_700K.parquet",
+    "../../PbTiO3/pbtio3_222_800K.parquet",
+]
+frame_start = 100
+frame_end   = -1
+stride      = 200
+
+output_dir = "./output"
+log_file   = "bvff.log"
+task       = "both"
+
+train_ratio = 0.8
+split_seed  = 0
+split_mode  = "block"
+
+[potentials]
+use_coulomb    = 1
+use_repulsive  = 0
+use_buckingham = 1
+use_BV         = 1
+use_BVV        = 1
+use_angle      = 0
+bv_form        = "exp"
+
+[extensions]
+use_ewald = 1
+
+[fitting]
+optimizer   = "least_squares"
+fit_charges = 0
+w_E         = 1.0
+w_F         = 1.0
+w_S         = 1.0
+use_stress  = 0
+polish      = 1
+target_loss = 0.0
+patience    = 50
+maxiter     = 1000
+n_jobs      = 8
+lambda_reg  = 1e-1
+log_space   = 1

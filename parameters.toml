@@ -1,0 +1,78 @@
+# PbTiO3 initial parameters.
+# Coulomb charges are FIXED during the fit (controls fit_charges=0) — the
+# bond-valence-FF convention. These are *reduced effective* charges (rigid-ion
+# style), cell-neutral: 8*(+1.4) + 8*(+1.0) + 24*(-0.8) = 11.2 + 8 − 19.2 = 0.
+# Reduced (rather than formal +2/+4/−2) so the r^-12 repulsion can balance the
+# Coulomb; full formal charges would need a softer Buckingham repulsion. Charges
+# are not fit because an E+F fit is under-determined in them (Coulomb is
+# degenerate with the repulsion/BV terms) and would collapse them toward zero.
+# Cation-cation pairs (Pb-Pb, Pb-Ti, Ti-Ti) are intentionally omitted from
+# BV (bond valence is defined only for cation→anion bonds). Repulsive
+# cation-cation pairs are also omitted; the parsers treat missing pairs as
+# zero contribution.
+cutoff = 6.0
+
+[coulomb]
+Pb =  1.4
+Ti =  1.0
+O  = -0.8
+
+[repulsive]
+O-O  = 1.83
+O-Pb = 2.17
+O-Ti = 1.28
+
+[BV.species.Pb]
+V0 = 2.0
+S  = 0.5
+
+[BV.species.Ti]
+V0 = 4.0
+S  = 0.5
+
+[BV.species.O]
+V0 = 2.0
+S  = 0.5
+
+# Only cation-O bond valences are physically meaningful.
+# r0/b are the Brown-Altermatt bond-valence parameters (Brown & Altermatt 1985;
+# Brese & O'Keeffe 1991): V_ij = exp((r0 - r)/b), with b ≈ 0.37 Å near-universal.
+# C is used only when controls bv_form="power"; b (decay length, Å) when "exp".
+[BV.pairs.O-Pb]
+r0 = 2.112
+C  = 6.0
+b  = 0.37
+
+[BV.pairs.O-Ti]
+r0 = 1.815
+C  = 5.2
+b  = 0.37
+
+[BVV.Pb]
+W0 = 0.5
+D  = 0.1
+
+[BVV.Ti]
+W0 = 0.3
+D  = 0.1
+
+[BVV.O]
+W0 = 0.0
+D  = 0.0
+
+# BVV has its own bond-valence pair parameters, independent of [BV.pairs].
+# (If this block is omitted, the parser inherits a copy of [BV.pairs].)
+# Seeded with the same Brown-Altermatt r0/b as [BV.pairs].
+# C is used when bv_form="power"; b (decay length, Å) when "exp".
+[BVV.pairs.O-Pb]
+r0 = 2.112
+C  = 6.0
+b  = 0.37
+
+[BVV.pairs.O-Ti]
+r0 = 1.815
+C  = 5.2
+b  = 0.37
+
+[angle]
+k = 1.0
