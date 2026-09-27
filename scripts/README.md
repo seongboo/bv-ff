@@ -8,6 +8,7 @@ Utility scripts that sit outside the main `src/` pipeline.
 | `analysis.py`       | library | RMSE / parity / force-distribution plots. Imported by `src/main.py` (Step 6/7). |
 | `ferroelectric.py`  | CLI + library | Ferroelectric validation gate: double-well scan, point-charge polarization, polar retention, NVT stability. `run_validation()` runs as Step 7/7 of every fit and persists `ferroelectric_validation.toml` + `double_well.png`; run standalone from a fit directory for a nonzero exit code on failure. |
 | `gen_poscars.py`    | CLI | Generate the static DFT training-structure set (cubic EOS, tetragonal GS, double-well path, c/a scan) as POSCARs. |
+| `gen_dft_dataset.py` | CLI | Generate full VASP input dirs (INCAR/KPOINTS/POSCAR) for the PbTiO3 cell/stress training set — phase relaxations, strain grid, rattled AIMD frames — on the same ENCUT/Γ-only k reference as the P4mm AIMD. |
 | `vasprun2data.py`   | CLI | Convert vasprun.xml trajectories into the long-format AIMD parquet the readers ingest. |
 
 ---
