@@ -15,7 +15,7 @@ from bvff.parsers.parameters_parser import (
     COMMON_ANIONS,
 )
 from bvff.parsers.dataset import Frame
-from .outputs import progress_iter
+from .outputs import LogThrottle, progress_iter
 from .potentials import BVFF
 
 
@@ -27,12 +27,6 @@ logger = logging.getLogger("bvff")
 # patience counter and the run never terminates short of maxiter. 1e-5 means
 # "ignore improvements smaller than 0.001% of the current best".
 _PATIENCE_REL_TOL = 1e-5
-
-# How often to print a per-iteration log line during the SA inner loop.
-# Improvement lines (patience-reset events) are always logged; non-improvement
-# lines are throttled to every _LOG_EVERY iterations. With ~5 evals/s a
-# value of 100 gives ~one line every 20 s — readable without flooding the log.
-_LOG_EVERY = 100
 
 # Finite penalty returned by compute_loss when a parameter set produces a
 # non-finite loss (overflow / division blow-up). Large enough that the
@@ -662,6 +656,9 @@ def _single_anneal(
         "t0":            time.time(),
         "stop_reason":   None,
     }
+    # Improvement lines (patience-reset events) are always logged; the rest
+    # are throttled to one line per LOG_INTERVAL_S.
+    throttle = LogThrottle()
 
     def objective(x: np.ndarray) -> float:
         next_iter      = state["iter"] + 1
@@ -688,7 +685,8 @@ def _single_anneal(
         else:
             state["since_improve"] += 1
 
-        if state["stop_reason"] is None:
+        was_stopped = state["stop_reason"] is not None
+        if not was_stopped:
             if target_loss > 0 and state["best"] <= target_loss:
                 state["stop_reason"] = f"target_loss {target_loss:.6f} reached (best={state['best']:.6f})"
             elif patience > 0 and state["since_improve"] >= patience:
@@ -697,8 +695,10 @@ def _single_anneal(
         if verbose:
             should_log = (
                 improved
-                or state["stop_reason"] is not None
-                or next_iter % _LOG_EVERY == 0
+                # log the stop once — dual_annealing only checks the stop
+                # callback after a local search, so evaluations continue
+                or (state["stop_reason"] is not None and not was_stopped)
+                or throttle.ready()
             )
             if should_log:
                 elapsed = time.time() - state["t0"]
@@ -1076,19 +1076,59 @@ def _single_least_squares(
     jac_mode:  str,
     transform: "ParamTransform",
     res_args:  tuple,
+    verbose:   bool = False,
 ):
     """One bounded trust-region run from one start (module-level so a
     multi-start ensemble can fan out over a joblib pool). Returns
-    (z_best, cost, nfev, status)."""
+    (z_best, cost, nfev, status). ``verbose`` logs the iterations (first one,
+    then one line per LOG_INTERVAL_S) — only meaningful in the main process,
+    since worker logging does not reach the main log."""
     from scipy.optimize import least_squares
     jac = _jacobian_z if jac_mode == "analytic" else "2-point"
+    extra = {}
+    if verbose:
+        throttle, t0 = LogThrottle(), time.time()
+
+        def callback(intermediate_result):
+            if throttle.ready():
+                r = intermediate_result
+                logger.info(
+                    f"  LSQ iter {r.nit:4d} | cost={r.cost:.6g} | "
+                    f"{r.nfev}/{maxiter} residual evals | elapsed {time.time() - t0:6.1f}s"
+                )
+        extra["callback"] = callback          # SciPy >= 1.16
     result = least_squares(
         _residuals_z, z0, bounds=(np.array([b[0] for b in zbounds]),
                                   np.array([b[1] for b in zbounds])),
         method="trf", jac=jac, x_scale="jac", max_nfev=maxiter,
-        args=(transform, *res_args),
+        args=(transform, *res_args), **extra,
     )
     return result.x, float(result.cost), int(result.nfev), int(result.status)
+
+
+def _tagged(i: int, fn: Callable, *args, **kwargs):
+    """``(i, fn(...))`` — lets a multi-start ensemble consume joblib results in
+    completion order (``return_as="generator_unordered"``) and still know which
+    start each one is."""
+    return i, fn(*args, **kwargs)
+
+
+def _run_starts(fn: Callable, jobs: list[tuple[tuple, dict]], n_jobs: int,
+                describe: Callable[[int, tuple], str]) -> list:
+    """Run ``fn(*args, **kwargs)`` for each ``(args, kwargs)`` in ``jobs`` over
+    a joblib pool, logging one line per start as it finishes (not all at the
+    end). Returns the results in start order."""
+    from joblib import Parallel, delayed
+    t0 = time.time()
+    out: list = [None] * len(jobs)
+    stream = Parallel(n_jobs=n_jobs, return_as="generator_unordered")(
+        delayed(_tagged)(i, fn, *a, **kw) for i, (a, kw) in enumerate(jobs)
+    )
+    for k, (i, res) in enumerate(stream, start=1):
+        out[i] = res
+        logger.info(f"  start {i} done ({k}/{len(jobs)}, {time.time() - t0:.1f}s): "
+                    f"{describe(i, res)}")
+    return out
 
 
 # ──────────────────────────────────────────────
@@ -1356,19 +1396,17 @@ def fit(
         if len(starts) == 1:
             runs = [_single_least_squares(
                 starts[0], zbounds, maxiter, jac, transform, res_args_of(n_jobs),
+                verbose=True,
             )]
         else:
-            from joblib import Parallel, delayed
-            runs = Parallel(n_jobs=n_jobs)(
-                delayed(_single_least_squares)(
-                    zs, zbounds, maxiter, jac, transform, res_args_of(1),
-                ) for zs in starts
+            runs = _run_starts(
+                _single_least_squares,
+                [((zs, zbounds, maxiter, jac, transform, res_args_of(1)), {})
+                 for zs in starts],
+                n_jobs,
+                lambda i, r: (f"{'(seed point) ' if i == 0 else ''}cost={r[1]:.6g} "
+                              f"| {r[2]} evals | status={r[3]}"),
             )
-            for i, (_, cost, nfev, status) in enumerate(runs):
-                logger.info(
-                    f"  start {i}{' (seed point)' if i == 0 else '':s}: "
-                    f"cost={cost:.6g} | {nfev} evals | status={status}"
-                )
 
         best_idx  = int(np.argmin([r[1] for r in runs]))
         best_z    = runs[best_idx][0]
@@ -1418,16 +1456,14 @@ def fit(
             # Ensemble: n_starts runs with distinct seeds, dispatched across the
             # n_jobs pool. Each run is serial-framed (n_jobs=1) and quiet
             # (verbose=False) since worker logging does not reach the main log.
-            from joblib import Parallel, delayed
-            results = Parallel(n_jobs=n_jobs)(
-                delayed(_single_anneal)(seed=seed + i, n_jobs=1, verbose=False, **anneal_args)
-                for i in range(n_starts)
+            results = _run_starts(
+                _single_anneal,
+                [((), dict(seed=seed + i, n_jobs=1, verbose=False, **anneal_args))
+                 for i in range(n_starts)],
+                n_jobs,
+                lambda i, r: (f"seed {seed + i} | best loss = {r[1]:.6f} "
+                              f"| {r[2]} evals | {r[3] or 'maxiter reached'}"),
             )
-            for i, (_, bl, ne, sr) in enumerate(results):
-                logger.info(
-                    f"  start {i} (seed {seed + i}): best loss = {bl:.6f} "
-                    f"| {ne} evals | {sr or 'maxiter reached'}"
-                )
             best_idx = int(np.argmin([r[1] for r in results]))
             best_z, best_loss = results[best_idx][0], float(results[best_idx][1])
             logger.info(
@@ -1463,8 +1499,20 @@ def fit(
                 def jac(z: np.ndarray) -> np.ndarray:
                     return _fd_grad_parallel(z, loss_serial(z), loss_serial, zbounds, n_jobs)
 
+            polish_throttle = LogThrottle()
+
+            def polish_cb(intermediate_result):
+                if polish_throttle.ready():
+                    logger.info(
+                        f"  polish iter {polish_cb.nit:4d} | loss={intermediate_result.fun:.6f} "
+                        f"| elapsed {time.time() - t_polish:6.1f}s"
+                    )
+                polish_cb.nit += 1
+            polish_cb.nit = 1
+
             polish_res = minimize(
                 loss_serial, best_z, method="L-BFGS-B", bounds=zbounds, jac=jac,
+                callback=polish_cb,
             )
             polish_loss = float(polish_res.fun)
             if polish_loss < best_loss:

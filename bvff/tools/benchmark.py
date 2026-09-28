@@ -96,10 +96,11 @@ def main() -> int:
     from bvff.core.main                  import build_bvff
     from bvff.core.calculator            import BVFFCalculator
     from .ferroelectric     import _detect_chemistry
+    from bvff.core.outputs              import cli_logger
 
     controls = parse_controls("controls.toml")
     fitted   = parse_parameters("output/fitted_parameters.toml", validate=True)
-    frame    = load_dataset(entries=controls.dataset).frames[0]
+    frame    = load_dataset(entries=controls.dataset, logger=cli_logger()).frames[0]
     A_site, a_ref = _detect_chemistry(frame)
     elems    = sorted(set(frame.species))
     calc     = BVFFCalculator(build_bvff(controls, fitted))

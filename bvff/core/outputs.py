@@ -19,15 +19,58 @@ T = TypeVar("T")
 # Logger
 # ──────────────────────────────────────────────
 
+# Minimum spacing of periodic progress lines (optimizer iterations, MD steps).
+# Time-based rather than every-N-iterations, since one iteration costs anywhere
+# from milliseconds to minutes depending on the dataset size.
+LOG_INTERVAL_S = 10.0
+
+
+class LogThrottle:
+    """Rate limiter for periodic progress lines: ``ready()`` is True on the
+    first call, then at most once per ``interval`` seconds (``force=True``
+    always passes and restarts the interval)."""
+
+    def __init__(self, interval: float = LOG_INTERVAL_S):
+        self.interval = interval
+        self._last: float | None = None
+
+    def ready(self, force: bool = False) -> bool:
+        now = time.monotonic()
+        if force or self._last is None or now - self._last >= self.interval:
+            self._last = now
+            return True
+        return False
+
+
+def init_cli_output() -> None:
+    """Line-buffer stdout/stderr so output appears immediately even when piped
+    or redirected (SLURM, ``| tee``) — Python block-buffers a non-TTY stdout.
+    Call once at the top of every command-line entry point."""
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(line_buffering=True)
+        except Exception:
+            pass
+
+
+def cli_logger() -> logging.Logger:
+    """The 'bvff' logger for a standalone tool: stdout only, same format as a
+    fit log. Leaves an already-configured logger (e.g. inside bvff-fit) as is."""
+    init_cli_output()
+    logger = logging.getLogger("bvff")
+    if not logger.handlers:
+        logger.setLevel(logging.INFO)
+        ch = logging.StreamHandler(sys.stdout)
+        ch.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s",
+                                          datefmt="%H:%M:%S"))
+        logger.addHandler(ch)
+    return logger
+
+
 def setup_logger(log_file: str, output_dir: str) -> logging.Logger:
     """Configure the 'bvff' logger with both file and unbuffered stdout output."""
     Path(output_dir).mkdir(parents=True, exist_ok=True)
-
-    # Force line-buffered stdout so log lines appear immediately even when piped.
-    try:
-        sys.stdout.reconfigure(line_buffering=True)
-    except Exception:
-        pass
+    init_cli_output()
 
     logger = logging.getLogger("bvff")
     logger.setLevel(logging.INFO)

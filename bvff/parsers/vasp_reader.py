@@ -53,7 +53,10 @@ def read_vasprun(
         raise ValueError(f"stride must be >= 1, got {stride}.")
 
     if logger:
-        logger.info(f"Parsing {path} with pymatgen ...")
+        # pymatgen parses in one opaque call (no progress hook): give the file
+        # size so a long silence can be judged against it.
+        size_mb = Path(path).stat().st_size / 1e6
+        logger.info(f"Parsing {path} ({size_mb:.0f} MB) with pymatgen ...")
     t0 = time.time()
     vasprun = Vasprun(
         str(path),

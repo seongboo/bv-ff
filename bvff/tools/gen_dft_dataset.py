@@ -131,6 +131,8 @@ def set_D(out: Path, aimd: str, n: int, seed: int):
 
 
 def main():
+    from bvff.core.outputs import init_cli_output
+    init_cli_output()
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--out", default="dft_bvff")
     ap.add_argument("--aimd", default="examples/PbTiO3/pbtio3_222_300K.parquet",

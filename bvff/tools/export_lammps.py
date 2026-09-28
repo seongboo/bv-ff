@@ -29,6 +29,7 @@ Coulomb energy; forces agree to ~1e-4 eV/Å.
 """
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 import numpy as np
@@ -237,7 +238,9 @@ def _export(out_dir: str, frame_index: int, plugin: str | None):
         raise ValueError("export assumes Ewald electrostatics (coul/long); "
                          "direct tapered Coulomb has no LAMMPS analogue.")
 
-    frames = load_dataset(entries=controls.dataset).frames
+    # Logs only when a CLI configured the 'bvff' logger (see main()).
+    frames = load_dataset(entries=controls.dataset,
+                          logger=logging.getLogger("bvff")).frames
     frame  = frames[frame_index]
     elems  = sorted(set(frame.species))
 
@@ -289,6 +292,8 @@ def validate(out: Path, frame, controls, fitted, lmp: str) -> dict:
 
 def main():
     import argparse
+    from bvff.core.outputs import cli_logger
+    cli_logger()
     ap = argparse.ArgumentParser(description="Export a fitted BVFF to LAMMPS.")
     ap.add_argument("--out", default="lammps_export")
     ap.add_argument("--frame", type=int, default=0)

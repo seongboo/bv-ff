@@ -168,6 +168,8 @@ def generate(out_dir, supercell=(1, 1, 1), eos_points=7, dw_images=11):
 
 
 def main():
+    from bvff.core.outputs import init_cli_output
+    init_cli_output()
     ap = argparse.ArgumentParser(description="Generate DFT POSCAR set for ferroelectric BVFF fitting.")
     ap.add_argument("--out", default="examples/PbTiO3/dft_set", help="output directory")
     ap.add_argument("--supercell", nargs=3, type=int, default=[1, 1, 1],

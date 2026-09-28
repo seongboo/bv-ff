@@ -295,6 +295,8 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    from bvff.core.outputs import init_cli_output
+    init_cli_output()
     args = _build_parser().parse_args(argv)
 
     if not args.dataset:

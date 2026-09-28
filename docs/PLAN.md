@@ -27,7 +27,8 @@ NequIP을 결합한 강화 BVFF(NequIP-BVFF)로 확장한다.
 
 ### 1-1. 코드 마무리
 - [x] `__init__.py`와 import 경로 정리 (어느 디렉토리에서 실행해도 동작) — `src`/`parsers`/`scripts` → `bvff.core`/`bvff.parsers`/`bvff.tools`, `sys.path` 조작 제거, `bvff-*` 명령, 테스트 데이터 경로는 저장소 루트 기준
-- [ ] 장시간 계산의 진행 출력: `flush=True`, fitting 반복별 로깅, vasprun 읽기/에너지 계산 진행 표시
+- [x] 장시간 계산의 진행 출력: `flush=True`, fitting 반복별 로깅, vasprun 읽기/에너지 계산 진행 표시 — CLI 진입점 line-buffering(`init_cli_output`), LSQ/L-BFGS-B polish 반복 로그, multi-start는 완료 순서대로, SA·MD(`bvff-tc-scan`)는 10 s 간격(`LOG_INTERVAL_S`), vasprun 파싱 시 파일 크기 표시
+- [ ] 조기 종료 실효화: `target_loss`/`patience`가 least-squares에는 적용되지 않고(SciPy callback으로 가능), SA는 멈춤 조건 후에도 다음 local search까지 계속 평가함
 - [ ] `lattice_vectors @ frac_vector` 방향 문제 검토 (행 벡터/열 벡터 규약 통일). 단사정·삼사정 셀 테스트 케이스로 확인
 
 ### 1-2. 단위 검증 (`tests/` 신설)

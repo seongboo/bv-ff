@@ -54,10 +54,12 @@ def scan_temperatures(
     configuration) rather than chaining — chaining biases the scan by hysteresis;
     independent starts probe where the polar state is *thermodynamically* lost.
     """
+    import time
     from ase import units
     from ase.md.velocitydistribution import MaxwellBoltzmannDistribution
+    from bvff.core.outputs import LogThrottle
 
-    log = logger.info if logger is not None else print
+    log = logger.info if logger is not None else (lambda msg: print(msg, flush=True))
     records = []
     for k, T in enumerate(temps):
         atoms = atoms0.copy()
@@ -87,7 +89,18 @@ def scan_temperatures(
                     cell = atoms.cell.lengths()
                     ca_samples.append(cell[2] / np.mean(cell[:2]))
 
+        throttle, t0 = LogThrottle(), time.time()
+
+        def _progress():
+            n = dyn.nsteps
+            if n and throttle.ready(force=(n == steps)):
+                el = time.time() - t0
+                log(f"    T={T:6.0f} K | step {n:6d}/{steps} | "
+                    f"T_inst {atoms.get_temperature():7.1f} K | elapsed {el:6.1f}s "
+                    f"| ETA {el / n * (steps - n):6.1f}s")
+
         dyn.attach(_sample, interval=sample_every)
+        dyn.attach(_progress, interval=1)
         dyn.run(steps)
 
         u  = np.asarray(u_samples) if u_samples else np.zeros((0, 3))
@@ -131,6 +144,8 @@ def _main() -> int:
     import csv
     import logging
 
+    from bvff.core.outputs import init_cli_output
+    init_cli_output()
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     log = logging.getLogger("bvff.tc")
 
@@ -156,7 +171,7 @@ def _main() -> int:
     calc     = BVFFCalculator(build_bvff(controls, fitted))
 
     # Start from a polar training frame (already in the ferroelectric basin).
-    frame  = load_dataset(entries=controls.dataset).frames[0]
+    frame  = load_dataset(entries=controls.dataset, logger=log).frames[0]
     atoms0 = atoms_from_frame(frame)
     log.info(f"Start: {len(atoms0)} atoms | "
              f"|u0| = {np.linalg.norm(cation_offcentering(atoms0, 'Ti')):.3f} Å "

@@ -568,6 +568,8 @@ def _demo() -> int:
     verdict next to it. Exits nonzero on a failed validation, so this can gate
     a refit pipeline."""
     import logging
+    from bvff.core.outputs import init_cli_output
+    init_cli_output()
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     log = logging.getLogger("bvff.fe")
 
@@ -581,7 +583,7 @@ def _demo() -> int:
     data_frame = None
     try:
         from bvff.parsers.dataset import load_dataset
-        data_frame = load_dataset(entries=controls.dataset).frames[0]
+        data_frame = load_dataset(entries=controls.dataset, logger=log).frames[0]
     except Exception as exc:                                  # pragma: no cover
         log.info(f"  (no data frame — retention test will be skipped: {exc})")
 

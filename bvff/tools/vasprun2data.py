@@ -112,6 +112,8 @@ def convert(vasprun_paths, out_path, log=print) -> dict:
 
 
 def main():
+    from bvff.core.outputs import init_cli_output
+    init_cli_output()
     if len(sys.argv) < 3:
         print(__doc__)
         print("usage: bvff-vasprun2data OUT.parquet vasprun1.xml [vasprun2.xml ...]")
